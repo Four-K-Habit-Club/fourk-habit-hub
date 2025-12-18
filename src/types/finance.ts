@@ -1,3 +1,4 @@
+//src/types/finance.ts
 export type TransactionType = 'income' | 'expense' | 'savings';
 
 export interface FinanceRecord {

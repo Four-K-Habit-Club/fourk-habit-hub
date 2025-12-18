@@ -1,14 +1,15 @@
 import { FinanceRecord } from "@/types/finance";
+import { User } from "@supabase/supabase-js";
 
 const STORAGE_KEY = 'finance_records';
 
-export const getFinanceRecords = (user: any): FinanceRecord[] => {
+export const getFinanceRecords = (user: User | null): FinanceRecord[] => {
   if (!user) return [];
   const data = localStorage.getItem(`${STORAGE_KEY}_${user.id}`);
   return data ? JSON.parse(data) : [];
 };
 
-export const saveFinanceRecord = (user: any, record: Omit<FinanceRecord, 'id' | 'timestamp'>) => {
+export const saveFinanceRecord = (user: User | null, record: Omit<FinanceRecord, 'id' | 'timestamp'>) => {
   if (!user) return;
   const records = getFinanceRecords(user);
   const newRecord: FinanceRecord = {
@@ -21,7 +22,7 @@ export const saveFinanceRecord = (user: any, record: Omit<FinanceRecord, 'id' | 
 };
 
 export const getFinanceStats = (
-  user: any, 
+  user: User | null, 
   period: 'daily' | 'weekly' | 'monthly' | 'yearly', 
   dateReference: Date = new Date()
 ) => {
@@ -39,8 +40,8 @@ export const getFinanceStats = (
       return recordDate.getTime() === refDate.getTime();
     }
     if (period === 'weekly') {
-      // Get start of week (Sunday) based on reference date
-      const day = refDate.getDay(); // 0 (Sun) to 6 (Sat)
+      // Calculate start of week (Sunday)
+      const day = refDate.getDay();
       const diff = refDate.getDate() - day;
       
       const startOfWeek = new Date(refDate);

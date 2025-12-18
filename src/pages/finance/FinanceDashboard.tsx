@@ -1,3 +1,4 @@
+//src/pages/finance/FinanceDashboard.tsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card } from '@/components/ui/card';
@@ -5,17 +6,29 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getFinanceStats } from '../../lib/financeStorage';
 import { Link } from 'react-router-dom';
-import { Plus, Wallet, TrendingDown, PiggyBank, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { Plus, Wallet, TrendingDown, PiggyBank, ArrowUpRight, ArrowDownRight, Loader2 } from 'lucide-react';
 
 export const FinanceDashboard: React.FC = () => {
   const { user } = useAuth();
   const [period, setPeriod] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('monthly');
   const [stats, setStats] = useState({ income: 0, expense: 0, savings: 0 });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) return;
-    const data = getFinanceStats(user, period, new Date());
-    setStats(data);
+    const fetchStats = async () => {
+      if (!user) return;
+      try {
+        setLoading(true);
+        const data = await getFinanceStats(user.id, period, new Date());
+        setStats(data);
+      } catch (error) {
+        console.error("Failed to load finance stats", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStats();
   }, [user, period]);
 
   const formatCurrency = (amount: number) => {
@@ -23,6 +36,14 @@ export const FinanceDashboard: React.FC = () => {
   };
 
   const netBalance = stats.income - stats.expense;
+
+  if (loading && stats.income === 0 && stats.expense === 0) {
+    return (
+      <div className="flex h-[50vh] items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">

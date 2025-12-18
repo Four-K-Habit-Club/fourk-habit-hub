@@ -24,13 +24,13 @@ export const LogFinance: React.FC = () => {
     description: ''
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !formData.amount || !formData.category) return;
 
     setLoading(true);
     try {
-      saveFinanceRecord(user, {
+      await saveFinanceRecord(user.id, {
         type: formData.type,
         amount: parseFloat(formData.amount),
         category: formData.category,
@@ -40,6 +40,7 @@ export const LogFinance: React.FC = () => {
       toast.success('Transaction logged successfully');
       navigate('/finance');
     } catch (error) {
+      console.error(error);
       toast.error('Failed to save transaction');
     } finally {
       setLoading(false);
