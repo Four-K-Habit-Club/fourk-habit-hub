@@ -1,3 +1,4 @@
+//src/types/tasks.ts
 export interface TaskCategory {
   id: string;
   name: string;
