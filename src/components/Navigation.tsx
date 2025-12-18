@@ -28,14 +28,6 @@ export const Navigation: React.FC = () => {
     <nav className="bg-card border-b border-border shadow-sm">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
-          <Link to="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-primary flex items-center justify-center">
-              <span className="text-white font-bold text-lg">4K</span>
-            </div>
-            <span className="font-bold text-xl text-foreground">Four K Habit Club</span>
-          </Link>
-
-
           <div className="flex items-center gap-2">
             {navItems.map((item) => (
               <Link key={item.path} to={item.path}>
