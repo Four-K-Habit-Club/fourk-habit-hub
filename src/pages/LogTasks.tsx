@@ -198,23 +198,13 @@ export const LogTasks: React.FC = () => {
             </div>
           </Card>
 
-          {/* 
-            Update 1: Added -mx-4 px-4 to the scroll container to make it touch screen edges on mobile 
-          */}
           <div className="overflow-x-auto pb-4 -mx-4 px-4 sm:mx-0 sm:px-0">
-            {/* 
-               Update 2: Reduced gap on mobile (gap-4) vs desktop (sm:gap-6)
-            */}
             <div className="flex gap-4 sm:gap-6 min-w-max">
               {TASKS.map((task) => (
                 <div 
                   key={task.id} 
-                  /* 
-                     Update 3: Changed width from fixed 'w-80' to responsive 'w-[85vw] sm:w-80'.
-                     This ensures 85% width on mobile (letting the next card peek) 
-                     and fixed 320px width on desktop.
-                  */
-                  className="w-[85vw] sm:w-80 flex-shrink-0 flex flex-col gap-3"
+                  // UPDATED: Changed w-[85vw] to w-[75vw] for better partial visibility of next card
+                  className="w-[75vw] sm:w-80 flex-shrink-0 flex flex-col gap-3"
                 >
                   <Button 
                     className="w-full shadow-sm bg-emerald-600 hover:bg-emerald-700 text-white"
