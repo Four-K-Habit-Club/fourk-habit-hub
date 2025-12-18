@@ -1,3 +1,4 @@
+//src/pages/LogTasks.tsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -25,51 +26,56 @@ export const LogTasks: React.FC = () => {
 
   const dateString = format(selectedDate, 'yyyy-MM-dd');
 
-  // Calculate current points for the selected date
-  const calculatePoints = () => {
+  const calculatePoints = async (): Promise<number> => {
     if (!user) return 0;
-    const logs = getTaskLogsForDate(user.email, dateString);
+    const logs = await getTaskLogsForDate(user, dateString);
     return logs.reduce((total, log) => total + log.points, 0);
   };
 
   useEffect(() => {
     if (!user) return;
-    
-    const completed = new Set<string>();
-    TASKS.forEach((task) => {
-      if (isSimpleMode) {
-        if (isTaskCompleted(user.email, dateString, task.id)) {
-          completed.add(task.id);
-        }
-      } else {
-        task.subtasks.forEach((subtask) => {
-          if (isTaskCompleted(user.email, dateString, task.id, subtask.id)) {
-            completed.add(`${task.id}-${subtask.id}`);
+
+    const fetchData = async () => {
+      const completed = new Set<string>();
+      const logs = await getTaskLogsForDate(user, dateString);
+      const points = await calculatePoints();
+      setCurrentPoints(points);
+
+      for (const task of TASKS) {
+        if (isSimpleMode) {
+          const completedTask = await isTaskCompleted(user, dateString, task.id);
+          if (completedTask) completed.add(task.id);
+        } else {
+          for (const subtask of task.subtasks) {
+            const completedSub = await isTaskCompleted(user, dateString, task.id, subtask.id);
+            if (completedSub) completed.add(`${task.id}-${subtask.id}`);
           }
-        });
+        }
       }
-    });
-    setCompletedTasks(completed);
-    setCurrentPoints(calculatePoints());
+      setCompletedTasks(completed);
+    };
+
+    fetchData();
   }, [user, dateString, isSimpleMode]);
 
-  const handleToggleTask = (taskId: string, subtaskId?: string, points?: number) => {
+  const handleToggleTask = async (taskId: string, subtaskId?: string, points?: number) => {
     if (!user || !points) return;
 
     const key = subtaskId ? `${taskId}-${subtaskId}` : taskId;
     const isCompleted = completedTasks.has(key);
 
     if (isCompleted) {
-      removeTaskLog(user.email, dateString, taskId, subtaskId);
+      await removeTaskLog(user, dateString, taskId, subtaskId);
       setCompletedTasks((prev) => {
         const next = new Set(prev);
         next.delete(key);
         return next;
       });
-      setCurrentPoints(calculatePoints());
+      const newPoints = await calculatePoints();
+      setCurrentPoints(newPoints);
       toast.info(t('task.uncompleted'));
     } else {
-      saveTaskLog(user.email, {
+      await saveTaskLog(user, {
         date: dateString,
         taskId,
         subtaskId,
@@ -77,7 +83,8 @@ export const LogTasks: React.FC = () => {
         timestamp: Date.now(),
       });
       setCompletedTasks((prev) => new Set(prev).add(key));
-      setCurrentPoints((prev) => prev + points);
+      const newPoints = await calculatePoints();
+      setCurrentPoints(newPoints);
       toast.success(t('task.completed'), {
         description: `+${points} points`,
       });
