@@ -1,3 +1,4 @@
+//src/pages/History.tsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -14,11 +15,14 @@ export const History: React.FC = () => {
   const { t } = useLanguage();
   const [history, setHistory] = useState<DailyProgress[]>([]);
 
-  useEffect(() => {
+useEffect(() => {
+  const fetchHistory = async () => {
     if (!user) return;
-    const data = getAllDailyProgress(user.email);
+    const data = await getAllDailyProgress(user);
     setHistory(data);
-  }, [user]);
+  };
+  fetchHistory();
+}, [user]);
 
   const getTaskName = (taskId: string) => {
     const task = TASKS.find((t) => t.id === taskId);
