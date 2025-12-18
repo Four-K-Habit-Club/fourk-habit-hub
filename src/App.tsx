@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { Button } from '@/components/ui/button';
-import { LanguageProvider,useLanguage } from "@/contexts/LanguageContext";
+import { LanguageProvider, useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
 
 // Household Pages
@@ -60,39 +60,44 @@ const MainLayout = ({ children }: { children: React.ReactNode }) => {
       {/* Top Navigation Tabs */}
       <header className="bg-card/50 backdrop-blur-md sticky top-0 z-50 border-b">
         <div className="container mx-auto px-4">
-          <div className="flex items-center justify-center h-16">
-            <div className="grid grid-cols-2 p-1 bg-muted rounded-lg w-full max-w-sm">
-              <button
-                onClick={() => navigate('/')}
-                className={cn(
-                  "flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-all",
-                  !isFinance 
-                    ? "bg-background text-foreground shadow-sm" 
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <Home className="w-4 h-4" />
-                Household
-              </button>
-              <button
-                onClick={() => navigate('/finance')}
-                className={cn(
-                  "flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-all",
-                  isFinance 
-                    ? "bg-background text-foreground shadow-sm" 
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <PieChart className="w-4 h-4" />
-                Finance
-              </button>
+          <div className="flex items-center justify-between h-16 gap-4">
+            {/* Navigation Tabs - Centered or Flex Start based on width */}
+            <div className="flex-1 flex justify-center">
+              <div className="grid grid-cols-2 p-1 bg-muted rounded-lg w-full max-w-sm">
+                <button
+                  onClick={() => navigate('/')}
+                  className={cn(
+                    "flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-all",
+                    !isFinance 
+                      ? "bg-background text-foreground shadow-sm" 
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <Home className="w-4 h-4" />
+                  Household
+                </button>
+                <button
+                  onClick={() => navigate('/finance')}
+                  className={cn(
+                    "flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-all",
+                    isFinance 
+                      ? "bg-background text-foreground shadow-sm" 
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <PieChart className="w-4 h-4" />
+                  Finance
+                </button>
+              </div>
             </div>
-          </div>
-        </div>
-        <Button variant="ghost" size="sm" onClick={logout} className="gap-2">
+
+            {/* Logout Button */}
+            <Button variant="ghost" size="sm" onClick={logout} className="gap-2 shrink-0 text-muted-foreground hover:text-destructive">
               <LogOut className="w-4 h-4" />
               <span className="hidden sm:inline">{t('nav.logout')}</span>
             </Button>
+          </div>
+        </div>
       </header>
 
       <main className="container mx-auto px-4 py-8">
