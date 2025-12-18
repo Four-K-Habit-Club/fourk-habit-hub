@@ -1,32 +1,52 @@
-import { FinanceRecord } from "@/types/finance";
-import { User } from "@supabase/supabase-js";
+// src/lib/financeStorage.ts
+import { supabase } from '../../src/lib/supabaseClient';
+import { FinanceRecord } from '@/types/finance';
 
-const STORAGE_KEY = 'finance_records';
+// ... (getFinanceRecords and saveFinanceRecord remain the same) ...
 
-export const getFinanceRecords = (user: User | null): FinanceRecord[] => {
-  if (!user) return [];
-  const data = localStorage.getItem(`${STORAGE_KEY}_${user.id}`);
-  return data ? JSON.parse(data) : [];
+export const getFinanceRecords = async (userId: string): Promise<FinanceRecord[]> => {
+  if (!userId) return [];
+  
+  const { data, error } = await supabase
+    .from('finance_records')
+    .select('*')
+    .eq('user_id', userId)
+    .order('date', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching finance records:', error);
+    return [];
+  }
+
+  return (data || []).map((item: any) => ({
+    ...item,
+    timestamp: item.timestamp || (item.created_at ? new Date(item.created_at).getTime() : Date.now())
+  })) as FinanceRecord[];
 };
 
-export const saveFinanceRecord = (user: User | null, record: Omit<FinanceRecord, 'id' | 'timestamp'>) => {
-  if (!user) return;
-  const records = getFinanceRecords(user);
-  const newRecord: FinanceRecord = {
-    ...record,
-    id: crypto.randomUUID(),
-    timestamp: Date.now(),
-  };
-  localStorage.setItem(`${STORAGE_KEY}_${user.id}`, JSON.stringify([...records, newRecord]));
-  return newRecord;
+export const saveFinanceRecord = async (
+  userId: string, 
+  record: Omit<FinanceRecord, 'id' | 'user_id' | 'created_at' | 'timestamp'>
+) => {
+  if (!userId) throw new Error('User not authenticated');
+
+  const { data, error } = await supabase
+    .from('finance_records')
+    .insert([{ user_id: userId, ...record }])
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
 };
 
-export const getFinanceStats = (
-  user: User | null, 
+// UPDATED FUNCTION
+export const getFinanceStats = async (
+  userId: string, 
   period: 'daily' | 'weekly' | 'monthly' | 'yearly', 
   dateReference: Date = new Date()
 ) => {
-  const records = getFinanceRecords(user);
+  const records = await getFinanceRecords(userId);
   
   const filtered = records.filter(record => {
     const recordDate = new Date(record.date);
@@ -40,8 +60,7 @@ export const getFinanceStats = (
       return recordDate.getTime() === refDate.getTime();
     }
     if (period === 'weekly') {
-      // Calculate start of week (Sunday)
-      const day = refDate.getDay();
+      const day = refDate.getDay(); // 0 (Sun) to 6 (Sat)
       const diff = refDate.getDate() - day;
       
       const startOfWeek = new Date(refDate);
@@ -63,8 +82,14 @@ export const getFinanceStats = (
     return false;
   });
 
-  return filtered.reduce((acc, curr) => {
-    acc[curr.type] += curr.amount;
+  const stats = filtered.reduce((acc, curr) => {
+    const amount = Number(curr.amount);
+    if (curr.type === 'income') acc.income += amount;
+    if (curr.type === 'expense') acc.expense += amount;
+    if (curr.type === 'savings') acc.savings += amount;
     return acc;
   }, { income: 0, expense: 0, savings: 0 });
+
+  // Return both the aggregated stats and the raw filtered records
+  return { stats, records: filtered };
 };

@@ -1,3 +1,4 @@
+//src/pages/finance/LogFinance.tsx
 import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card } from '@/components/ui/card';

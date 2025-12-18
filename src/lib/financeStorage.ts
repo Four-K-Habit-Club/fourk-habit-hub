@@ -16,7 +16,6 @@ export const getFinanceRecords = async (userId: string): Promise<FinanceRecord[]
   }
 
   // Map the database response to match the FinanceRecord interface
-  // We populate the legacy 'timestamp' field using 'created_at' to satisfy TypeScript
   return (data || []).map((item: any) => ({
     ...item,
     timestamp: item.timestamp || (item.created_at ? new Date(item.created_at).getTime() : Date.now())
@@ -25,7 +24,6 @@ export const getFinanceRecords = async (userId: string): Promise<FinanceRecord[]
 
 export const saveFinanceRecord = async (
   userId: string, 
-  // We omit 'timestamp' here because the database handles 'created_at'
   record: Omit<FinanceRecord, 'id' | 'user_id' | 'created_at' | 'timestamp'>
 ) => {
   if (!userId) throw new Error('User not authenticated');
@@ -86,11 +84,14 @@ export const getFinanceStats = async (
     return false;
   });
 
-  return filtered.reduce((acc, curr) => {
+  const stats = filtered.reduce((acc, curr) => {
     const amount = Number(curr.amount);
     if (curr.type === 'income') acc.income += amount;
     if (curr.type === 'expense') acc.expense += amount;
     if (curr.type === 'savings') acc.savings += amount;
     return acc;
   }, { income: 0, expense: 0, savings: 0 });
+
+  // Return both stats and records to fix the TypeScript error
+  return { stats, records: filtered };
 };
