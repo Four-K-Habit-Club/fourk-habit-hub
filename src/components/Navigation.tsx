@@ -27,7 +27,7 @@ export const Navigation: React.FC = () => {
   return (
     <nav className="bg-card border-b border-border shadow-sm">
       <div className="container mx-auto px-4">
-        <div className="flex items-center justify-between py-3">
+        <div className="flex items-center justify-center py-3">
           <div className="flex items-center gap-2">
             {navItems.map((item) => (
               <Link key={item.path} to={item.path}>
