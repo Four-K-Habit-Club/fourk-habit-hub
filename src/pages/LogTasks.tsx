@@ -23,10 +23,32 @@ export const LogTasks: React.FC = () => {
 
   const dateString = format(selectedDate, 'yyyy-MM-dd');
 
+  // UPDATED: Robust Point Calculation
   const calculatePoints = async (): Promise<number> => {
     if (!user) return 0;
     const logs = await getTaskLogsForDate(user, dateString);
-    return logs.reduce((total, log) => total + log.points, 0);
+    
+    // 1. Filter out "Simple Mode" logs (logs that don't have a subtaskId)
+    //    to prevent double counting if legacy data exists.
+    const advancedLogs = logs.filter(log => log.subtaskId);
+
+    // 2. Deduplicate: Ensure unique taskId + subtaskId combination
+    //    (In case the DB has duplicates)
+    const uniqueLogs = new Map();
+    advancedLogs.forEach(log => {
+      const key = `${log.taskId}-${log.subtaskId}`;
+      if (!uniqueLogs.has(key)) {
+        uniqueLogs.set(key, log);
+      }
+    });
+
+    // 3. Sum points, ensuring we treat them as Numbers
+    let total = 0;
+    uniqueLogs.forEach(log => {
+      total += (Number(log.points) || 0);
+    });
+
+    return total;
   };
 
   const getTaskTitle = () => {
@@ -48,11 +70,10 @@ export const LogTasks: React.FC = () => {
 
     const fetchData = async () => {
       const completed = new Set<string>();
-      // Calculate points
+      
       const points = await calculatePoints();
       setCurrentPoints(points);
 
-      // In "Advanced" mode (which is now default), we check every subtask
       for (const task of TASKS) {
         for (const subtask of task.subtasks) {
           const completedSub = await isTaskCompleted(user, dateString, task.id, subtask.id);
@@ -78,6 +99,7 @@ export const LogTasks: React.FC = () => {
         next.delete(key);
         return next;
       });
+      // Recalculate after change
       const newPoints = await calculatePoints();
       setCurrentPoints(newPoints);
       toast.info(t('task.uncompleted'));
@@ -90,6 +112,7 @@ export const LogTasks: React.FC = () => {
         timestamp: Date.now(),
       });
       setCompletedTasks((prev) => new Set(prev).add(key));
+      // Recalculate after change
       const newPoints = await calculatePoints();
       setCurrentPoints(newPoints);
       toast.success(t('task.completed'), {
@@ -98,7 +121,6 @@ export const LogTasks: React.FC = () => {
     }
   };
 
-  // New function to handle "Complete All" for a specific category
   const handleCompleteCategory = async (task: Task) => {
     if (!user) return;
 
@@ -106,11 +128,9 @@ export const LogTasks: React.FC = () => {
     const newCompleted = new Set(completedTasks);
     const updates: Promise<any>[] = [];
 
-    // Iterate through all subtasks of the category
     for (const subtask of task.subtasks) {
       const key = `${task.id}-${subtask.id}`;
       
-      // If this specific subtask is NOT already done, log it
       if (!completedTasks.has(key)) {
         updates.push(
           saveTaskLog(user, {
@@ -129,8 +149,11 @@ export const LogTasks: React.FC = () => {
     if (updates.length > 0) {
       await Promise.all(updates);
       setCompletedTasks(newCompleted);
+      
+      // Fetch fresh calculation from DB to ensure accuracy
       const newTotal = await calculatePoints();
       setCurrentPoints(newTotal);
+      
       toast.success(`Completed all ${t(task.id)} tasks!`, {
         description: `+${pointsAdded} points added`,
       });
@@ -203,15 +226,8 @@ export const LogTasks: React.FC = () => {
               {TASKS.map((task) => (
                 <div 
                   key={task.id} 
-                  // UPDATED: For better partial visibility of next card
-                  className="w-[70vw] sm:w-80 flex-shrink-0 flex flex-col gap-3"
+                  className="w-[75vw] sm:w-80 flex-shrink-0 flex flex-col gap-3"
                 >
-                  <TaskCard
-                    task={task}
-                    isSimpleMode={false} 
-                    completedTasks={completedTasks}
-                    onToggleTask={handleToggleTask}
-                  />
                   <Button 
                     className="w-full shadow-sm bg-emerald-600 hover:bg-emerald-700 text-white"
                     onClick={() => handleCompleteCategory(task)}
@@ -219,6 +235,13 @@ export const LogTasks: React.FC = () => {
                     <CheckCheck className="w-4 h-4 mr-2" />
                     Complete All {t(task.id)}
                   </Button>
+
+                  <TaskCard
+                    task={task}
+                    isSimpleMode={false} 
+                    completedTasks={completedTasks}
+                    onToggleTask={handleToggleTask}
+                  />
                 </div>
               ))}
             </div>
