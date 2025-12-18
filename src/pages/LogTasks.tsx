@@ -217,7 +217,7 @@ export const LogTasks: React.FC = () => {
               {TASKS.map((task) => (
                 <div 
                   key={task.id} 
-                  className="w-[75vw] sm:w-80 flex-shrink-0 flex flex-col gap-3"
+                  className="w-[70vw] sm:w-80 flex-shrink-0 flex flex-col gap-3"
                 >
                   {/* TaskCard is now placed FIRST */}
                   <TaskCard
