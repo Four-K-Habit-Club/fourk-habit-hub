@@ -9,12 +9,12 @@ export const saveTaskLog = async (user: User | null, log: TaskLog): Promise<void
   const date = log.date;
   const { data: existing, error: fetchError } = await supabase
     .from('daily_progress')
-    .select('logs, totalPoints')
+    .select('logs, total_points')
     .eq('user_id', user.id)
     .eq('date', date)
     .single();
 
-  if (fetchError && fetchError.code !== 'PGRST116') { // Ignore "no rows"
+  if (fetchError && fetchError.code !== 'PGRST116') {
     console.error('Fetch error:', fetchError);
     return;
   }
@@ -25,7 +25,7 @@ export const saveTaskLog = async (user: User | null, log: TaskLog): Promise<void
   if (existing) {
     const { error } = await supabase
       .from('daily_progress')
-      .update({ logs: newLogs, totalPoints: newTotal })
+      .update({ logs: newLogs, total_points: newTotal })
       .eq('user_id', user.id)
       .eq('date', date);
     if (error) console.error('Update error:', error);
@@ -35,7 +35,7 @@ export const saveTaskLog = async (user: User | null, log: TaskLog): Promise<void
       .insert({
         user_id: user.id,
         date,
-        totalPoints: newTotal,
+        total_points: newTotal,
         logs: newLogs,
       });
     if (error) console.error('Insert error:', error);
@@ -47,7 +47,7 @@ export const removeTaskLog = async (user: User | null, date: string, taskId: str
 
   const { data: existing, error: fetchError } = await supabase
     .from('daily_progress')
-    .select('logs, totalPoints')
+    .select('logs, total_points')
     .eq('user_id', user.id)
     .eq('date', date)
     .single();
@@ -64,7 +64,7 @@ export const removeTaskLog = async (user: User | null, date: string, taskId: str
 
   const { error } = await supabase
     .from('daily_progress')
-    .update({ logs: filteredLogs, totalPoints: newTotal })
+    .update({ logs: filteredLogs, total_points: newTotal })
     .eq('user_id', user.id)
     .eq('date', date);
 
@@ -76,13 +76,19 @@ export const getDailyProgress = async (user: User | null, date: string): Promise
 
   const { data, error } = await supabase
     .from('daily_progress')
-    .select('date, totalPoints, logs')
+    .select('date, total_points, logs')
     .eq('user_id', user.id)
     .eq('date', date)
     .single();
 
   if (error || !data) return null;
-  return data;
+
+  // Map snake_case to camelCase
+  return {
+    date: data.date,
+    totalPoints: data.total_points,
+    logs: data.logs,
+  };
 };
 
 export const getAllDailyProgress = async (user: User | null): Promise<DailyProgress[]> => {
@@ -90,7 +96,7 @@ export const getAllDailyProgress = async (user: User | null): Promise<DailyProgr
 
   const { data, error } = await supabase
     .from('daily_progress')
-    .select('date, totalPoints, logs')
+    .select('date, total_points, logs')
     .eq('user_id', user.id)
     .order('date', { ascending: false });
 
@@ -98,24 +104,44 @@ export const getAllDailyProgress = async (user: User | null): Promise<DailyProgr
     console.error('Fetch all error:', error);
     return [];
   }
-  return data || [];
+
+  // Map snake_case to camelCase
+  return (data || []).map((row: any) => ({
+    date: row.date,
+    totalPoints: row.total_points,
+    logs: row.logs,
+  }));
 };
 
 export const isTaskCompleted = async (user: User | null, date: string, taskId: string, subtaskId?: string): Promise<boolean> => {
   if (!user) return false;
 
-  const { data: progress } = await supabase
+  const { data: progress, error } = await supabase
     .from('daily_progress')
     .select('logs')
     .eq('user_id', user.id)
     .eq('date', date)
     .single();
 
-  if (!progress) return false;
+  if (error || !progress) return false;
 
   return progress.logs.some((log: TaskLog) =>
     subtaskId
       ? log.taskId === taskId && log.subtaskId === subtaskId
       : log.taskId === taskId && !log.subtaskId
   );
+};
+
+export const getTaskLogsForDate = async (user: User | null, date: string): Promise<TaskLog[]> => {
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from('daily_progress')
+    .select('logs')
+    .eq('user_id', user.id)
+    .eq('date', date)
+    .single();
+
+  if (error || !data) return [];
+  return data.logs || [];
 };
