@@ -5,7 +5,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
-import { LanguageProvider } from "@/contexts/LanguageContext";
+import { Button } from '@/components/ui/button';
+import { LanguageProvider,useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
 
 // Household Pages
@@ -19,9 +20,10 @@ import { LogFinance } from "./pages/finance/LogFinance";
 
 import { Auth } from "./pages/Auth";
 import NotFound from "./pages/NotFound";
-import { Home, PieChart } from "lucide-react";
+import { Home, PieChart, LogOut } from "lucide-react";
 
 const queryClient = new QueryClient();
+
 
 // --- Components for Layout ---
 
@@ -45,11 +47,14 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 };
 
 const MainLayout = ({ children }: { children: React.ReactNode }) => {
+  const { user, logout } = useAuth();
+  const { language, setLanguage, t } = useLanguage();
   const location = useLocation();
   const navigate = useNavigate();
   
   const isFinance = location.pathname.startsWith('/finance');
 
+  if (!user) return null;
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
       {/* Top Navigation Tabs */}
@@ -84,6 +89,10 @@ const MainLayout = ({ children }: { children: React.ReactNode }) => {
             </div>
           </div>
         </div>
+        <Button variant="ghost" size="sm" onClick={logout} className="gap-2">
+              <LogOut className="w-4 h-4" />
+              <span className="hidden sm:inline">{t('nav.logout')}</span>
+            </Button>
       </header>
 
       <main className="container mx-auto px-4 py-8">
