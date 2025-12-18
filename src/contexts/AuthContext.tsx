@@ -1,14 +1,12 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-
-interface User {
-  email: string;
-}
+// src/contexts/AuthContext.tsx
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabaseClient';
+import { Session, User } from '@supabase/supabase-js';
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string) => Promise<boolean>;
-  signup: (email: string, password: string) => Promise<boolean>;
-  logout: () => void;
+  loginWithGoogle: () => Promise<void>;
+  logout: () => Promise<void>;
   isLoading: boolean;
 }
 
@@ -19,58 +17,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const savedUser = localStorage.getItem('fourk-user');
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
-    }
-    setIsLoading(false);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      setIsLoading(false);
+    });
+
+    // Initial session check
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      setIsLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  const login = async (email: string, password: string): Promise<boolean> => {
-    try {
-      const users = JSON.parse(localStorage.getItem('fourk-users') || '{}');
-      
-      if (users[email] && users[email].password === password) {
-        const userData = { email };
-        setUser(userData);
-        localStorage.setItem('fourk-user', JSON.stringify(userData));
-        return true;
-      }
-      return false;
-    } catch (error) {
-      console.error('Login error:', error);
-      return false;
-    }
+  const loginWithGoogle = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: 'http://192.168.0.101:8080' },
+    });
   };
 
-  const signup = async (email: string, password: string): Promise<boolean> => {
-    try {
-      const users = JSON.parse(localStorage.getItem('fourk-users') || '{}');
-      
-      if (users[email]) {
-        return false; // User already exists
-      }
-      
-      users[email] = { password };
-      localStorage.setItem('fourk-users', JSON.stringify(users));
-      
-      const userData = { email };
-      setUser(userData);
-      localStorage.setItem('fourk-user', JSON.stringify(userData));
-      return true;
-    } catch (error) {
-      console.error('Signup error:', error);
-      return false;
-    }
-  };
-
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('fourk-user');
+  const logout = async () => {
+    await supabase.auth.signOut();
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, signup, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, loginWithGoogle, logout, isLoading }}>
       {children}
     </AuthContext.Provider>
   );
@@ -78,8 +51,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within AuthProvider');
   return context;
 };
