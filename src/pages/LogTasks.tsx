@@ -23,17 +23,12 @@ export const LogTasks: React.FC = () => {
 
   const dateString = format(selectedDate, 'yyyy-MM-dd');
 
-  // UPDATED: Robust Point Calculation
   const calculatePoints = async (): Promise<number> => {
     if (!user) return 0;
     const logs = await getTaskLogsForDate(user, dateString);
     
-    // 1. Filter out "Simple Mode" logs (logs that don't have a subtaskId)
-    //    to prevent double counting if legacy data exists.
     const advancedLogs = logs.filter(log => log.subtaskId);
 
-    // 2. Deduplicate: Ensure unique taskId + subtaskId combination
-    //    (In case the DB has duplicates)
     const uniqueLogs = new Map();
     advancedLogs.forEach(log => {
       const key = `${log.taskId}-${log.subtaskId}`;
@@ -42,7 +37,6 @@ export const LogTasks: React.FC = () => {
       }
     });
 
-    // 3. Sum points, ensuring we treat them as Numbers
     let total = 0;
     uniqueLogs.forEach(log => {
       total += (Number(log.points) || 0);
@@ -99,9 +93,8 @@ export const LogTasks: React.FC = () => {
         next.delete(key);
         return next;
       });
-      // Recalculate after change
-      const newPoints = await calculatePoints();
-      setCurrentPoints(newPoints);
+      // Optimistically update points for single toggle
+      setCurrentPoints((prev) => Math.max(0, prev - points));
       toast.info(t('task.uncompleted'));
     } else {
       await saveTaskLog(user, {
@@ -112,9 +105,8 @@ export const LogTasks: React.FC = () => {
         timestamp: Date.now(),
       });
       setCompletedTasks((prev) => new Set(prev).add(key));
-      // Recalculate after change
-      const newPoints = await calculatePoints();
-      setCurrentPoints(newPoints);
+      // Optimistically update points for single toggle
+      setCurrentPoints((prev) => prev + points);
       toast.success(t('task.completed'), {
         description: `+${points} points`,
       });
@@ -128,6 +120,7 @@ export const LogTasks: React.FC = () => {
     const newCompleted = new Set(completedTasks);
     const updates: Promise<any>[] = [];
 
+    // 1. Calculate the points to add locally first
     for (const subtask of task.subtasks) {
       const key = `${task.id}-${subtask.id}`;
       
@@ -147,12 +140,15 @@ export const LogTasks: React.FC = () => {
     }
 
     if (updates.length > 0) {
+      // 2. Wait for writes to ensure data integrity
       await Promise.all(updates);
+      
+      // 3. Update Checkboxes
       setCompletedTasks(newCompleted);
       
-      // Fetch fresh calculation from DB to ensure accuracy
-      const newTotal = await calculatePoints();
-      setCurrentPoints(newTotal);
+      // 4. FIX: Directly add the points we just calculated to the current state.
+      // Do NOT call calculatePoints() here, as it may fetch stale data due to DB latency.
+      setCurrentPoints((prev) => prev + pointsAdded);
       
       toast.success(`Completed all ${t(task.id)} tasks!`, {
         description: `+${pointsAdded} points added`,
