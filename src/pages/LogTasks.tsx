@@ -203,9 +203,15 @@ export const LogTasks: React.FC = () => {
               {TASKS.map((task) => (
                 <div 
                   key={task.id} 
-                  // UPDATED: Changed w-[85vw] to w-[75vw] for better partial visibility of next card
-                  className="w-[75vw] sm:w-80 flex-shrink-0 flex flex-col gap-3"
+                  // UPDATED: For better partial visibility of next card
+                  className="w-[70vw] sm:w-80 flex-shrink-0 flex flex-col gap-3"
                 >
+                  <TaskCard
+                    task={task}
+                    isSimpleMode={false} 
+                    completedTasks={completedTasks}
+                    onToggleTask={handleToggleTask}
+                  />
                   <Button 
                     className="w-full shadow-sm bg-emerald-600 hover:bg-emerald-700 text-white"
                     onClick={() => handleCompleteCategory(task)}
@@ -213,13 +219,6 @@ export const LogTasks: React.FC = () => {
                     <CheckCheck className="w-4 h-4 mr-2" />
                     Complete All {t(task.id)}
                   </Button>
-
-                  <TaskCard
-                    task={task}
-                    isSimpleMode={false} 
-                    completedTasks={completedTasks}
-                    onToggleTask={handleToggleTask}
-                  />
                 </div>
               ))}
             </div>
