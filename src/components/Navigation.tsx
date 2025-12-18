@@ -2,9 +2,9 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { useAuth } from '@/contexts/AuthContext';
+
 import { useLanguage } from '@/contexts/LanguageContext';
-import { LayoutDashboard, Plus, History, LogOut, Globe } from 'lucide-react';
+import { LayoutDashboard, Plus, History, Globe } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,11 +14,9 @@ import {
 import { cn } from '@/lib/utils';
 
 export const Navigation: React.FC = () => {
-  const { user, logout } = useAuth();
   const { language, setLanguage, t } = useLanguage();
   const location = useLocation();
 
-  if (!user) return null;
 
   const navItems = [
     { path: '/', icon: LayoutDashboard, label: t('nav.dashboard') },
@@ -73,11 +71,6 @@ export const Navigation: React.FC = () => {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-
-            <Button variant="ghost" size="sm" onClick={logout} className="gap-2">
-              <LogOut className="w-4 h-4" />
-              <span className="hidden sm:inline">{t('nav.logout')}</span>
-            </Button>
           </div>
         </div>
       </div>
