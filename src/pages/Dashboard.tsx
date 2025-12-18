@@ -1,3 +1,4 @@
+//src/pages/Dashboard.tsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -16,20 +17,25 @@ export const Dashboard: React.FC = () => {
   const [todayProgress, setTodayProgress] = useState(0);
   const [weekProgress, setWeekProgress] = useState(0);
 
+  const maxDailyPoints = TASKS.reduce((sum, task) => sum + task.points, 0);
+
   useEffect(() => {
     if (!user) return;
 
-    const today = new Date().toISOString().split('T')[0];
-    const todayData = getDailyProgress(user.email, today);
-    setTodayProgress(todayData.totalPoints);
+    const fetchData = async () => {
+      const today = new Date().toISOString().split('T')[0];
+      const todayData = await getDailyProgress(user, today);
+      setTodayProgress(todayData?.totalPoints || 0);
 
-    const allProgress = getAllDailyProgress(user.email);
-    const last7Days = allProgress.slice(0, 7);
-    const weekTotal = last7Days.reduce((sum, day) => sum + day.totalPoints, 0);
-    setWeekProgress(weekTotal);
+      const allProgress = await getAllDailyProgress(user);
+      const last7Days = allProgress.slice(0, 7);
+      const weekTotal = last7Days.reduce((sum, day) => sum + day.totalPoints, 0);
+      setWeekProgress(weekTotal);
+    };
+
+    fetchData();
   }, [user]);
 
-  const maxDailyPoints = TASKS.reduce((sum, task) => sum + task.points, 0);
   const progressPercentage = Math.min((todayProgress / maxDailyPoints) * 100, 100);
 
   return (
