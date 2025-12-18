@@ -31,6 +31,20 @@ export const LogTasks: React.FC = () => {
     const logs = await getTaskLogsForDate(user, dateString);
     return logs.reduce((total, log) => total + log.points, 0);
   };
+  const getTaskTitle = () => {
+    const today = new Date();
+    const isToday = 
+      selectedDate.getFullYear() === today.getFullYear() &&
+      selectedDate.getMonth() === today.getMonth() &&
+      selectedDate.getDate() === today.getDate();
+
+    if (isToday) {
+      return "Today";
+    } else {
+      // Format as "Wednesday, December 18" (adjust format as needed)
+      return format(selectedDate, "EEEE, MMMM d");
+    }
+    };
 
   useEffect(() => {
     if (!user) return;
@@ -155,7 +169,7 @@ export const LogTasks: React.FC = () => {
             <div className="flex items-center justify-center gap-4">
               <Award className="w-8 h-8 text-primary" />
               <div className="text-center">
-                <p className="text-sm text-muted-foreground mb-1">Today's Progress</p>
+                <p className="text-sm text-muted-foreground mb-1">{getTaskTitle()}'s Progress</p>
                 <p className="text-4xl font-bold text-foreground">{currentPoints}</p>
                 <p className="text-sm text-muted-foreground">points</p>
               </div>
