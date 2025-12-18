@@ -131,12 +131,10 @@ export const LogTasks: React.FC = () => {
       setCompletedTasks(newCompleted);
       const newTotal = await calculatePoints();
       setCurrentPoints(newTotal);
-      // FIXED: Use t(task.id) instead of task.title
       toast.success(`Completed all ${t(task.id)} tasks!`, {
         description: `+${pointsAdded} points added`,
       });
     } else {
-      // FIXED: Use t(task.id) instead of task.title
       toast.info(`All tasks in ${t(task.id)} are already completed.`);
     }
   };
@@ -200,21 +198,32 @@ export const LogTasks: React.FC = () => {
             </div>
           </Card>
 
-          <div className="overflow-x-auto pb-4">
-            <div className="flex gap-6 min-w-max">
+          {/* 
+            Update 1: Added -mx-4 px-4 to the scroll container to make it touch screen edges on mobile 
+          */}
+          <div className="overflow-x-auto pb-4 -mx-4 px-4 sm:mx-0 sm:px-0">
+            {/* 
+               Update 2: Reduced gap on mobile (gap-4) vs desktop (sm:gap-6)
+            */}
+            <div className="flex gap-4 sm:gap-6 min-w-max">
               {TASKS.map((task) => (
-                <div key={task.id} className="w-80 flex-shrink-0 flex flex-col gap-3">
-                  {/* Complete All Button */}
+                <div 
+                  key={task.id} 
+                  /* 
+                     Update 3: Changed width from fixed 'w-80' to responsive 'w-[85vw] sm:w-80'.
+                     This ensures 85% width on mobile (letting the next card peek) 
+                     and fixed 320px width on desktop.
+                  */
+                  className="w-[85vw] sm:w-80 flex-shrink-0 flex flex-col gap-3"
+                >
                   <Button 
                     className="w-full shadow-sm bg-emerald-600 hover:bg-emerald-700 text-white"
                     onClick={() => handleCompleteCategory(task)}
                   >
                     <CheckCheck className="w-4 h-4 mr-2" />
-                    {/* FIXED: Use t(task.id) instead of task.title */}
                     Complete All {t(task.id)}
                   </Button>
 
-                  {/* Task Card forces isSimpleMode to false */}
                   <TaskCard
                     task={task}
                     isSimpleMode={false} 
