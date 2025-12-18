@@ -93,7 +93,7 @@ export const LogTasks: React.FC = () => {
         next.delete(key);
         return next;
       });
-      // Optimistically update points for single toggle
+      // Optimistically update points
       setCurrentPoints((prev) => Math.max(0, prev - points));
       toast.info(t('task.uncompleted'));
     } else {
@@ -105,7 +105,7 @@ export const LogTasks: React.FC = () => {
         timestamp: Date.now(),
       });
       setCompletedTasks((prev) => new Set(prev).add(key));
-      // Optimistically update points for single toggle
+      // Optimistically update points
       setCurrentPoints((prev) => prev + points);
       toast.success(t('task.completed'), {
         description: `+${points} points`,
@@ -120,7 +120,6 @@ export const LogTasks: React.FC = () => {
     const newCompleted = new Set(completedTasks);
     const updates: Promise<any>[] = [];
 
-    // 1. Calculate the points to add locally first
     for (const subtask of task.subtasks) {
       const key = `${task.id}-${subtask.id}`;
       
@@ -140,14 +139,10 @@ export const LogTasks: React.FC = () => {
     }
 
     if (updates.length > 0) {
-      // 2. Wait for writes to ensure data integrity
       await Promise.all(updates);
-      
-      // 3. Update Checkboxes
       setCompletedTasks(newCompleted);
       
-      // 4. FIX: Directly add the points we just calculated to the current state.
-      // Do NOT call calculatePoints() here, as it may fetch stale data due to DB latency.
+      // Directly add calculated points to state
       setCurrentPoints((prev) => prev + pointsAdded);
       
       toast.success(`Completed all ${t(task.id)} tasks!`, {
@@ -224,12 +219,15 @@ export const LogTasks: React.FC = () => {
                   key={task.id} 
                   className="w-[75vw] sm:w-80 flex-shrink-0 flex flex-col gap-3"
                 >
+                  {/* TaskCard is now placed FIRST */}
                   <TaskCard
                     task={task}
                     isSimpleMode={false} 
                     completedTasks={completedTasks}
                     onToggleTask={handleToggleTask}
                   />
+
+                  {/* Button is now placed SECOND (Below the card) */}
                   <Button 
                     className="w-full shadow-sm bg-emerald-600 hover:bg-emerald-700 text-white"
                     onClick={() => handleCompleteCategory(task)}
