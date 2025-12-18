@@ -1,4 +1,4 @@
-//src/pages/LogTasks.tsx
+// src/pages/LogTasks.tsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -8,18 +8,15 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
-import { TASKS } from '@/types/tasks';
+import { TASKS, Task } from '@/types/tasks';
 import { saveTaskLog, removeTaskLog, isTaskCompleted, getTaskLogsForDate } from '@/lib/storage';
 import { toast } from 'sonner';
-import { CalendarIcon, Sparkles, Award } from 'lucide-react';
+import { CalendarIcon, Award, CheckCheck } from 'lucide-react';
 import { format } from 'date-fns';
 
 export const LogTasks: React.FC = () => {
   const { user } = useAuth();
   const { t } = useLanguage();
-  const [isSimpleMode, setIsSimpleMode] = useState(true);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [completedTasks, setCompletedTasks] = useState<Set<string>>(new Set());
   const [currentPoints, setCurrentPoints] = useState(0);
@@ -31,6 +28,7 @@ export const LogTasks: React.FC = () => {
     const logs = await getTaskLogsForDate(user, dateString);
     return logs.reduce((total, log) => total + log.points, 0);
   };
+
   const getTaskTitle = () => {
     const today = new Date();
     const isToday = 
@@ -41,36 +39,31 @@ export const LogTasks: React.FC = () => {
     if (isToday) {
       return "Today";
     } else {
-      // Format as "Wednesday, December 18" (adjust format as needed)
       return format(selectedDate, "EEEE, MMMM d");
     }
-    };
+  };
 
   useEffect(() => {
     if (!user) return;
 
     const fetchData = async () => {
       const completed = new Set<string>();
-      const logs = await getTaskLogsForDate(user, dateString);
+      // Calculate points
       const points = await calculatePoints();
       setCurrentPoints(points);
 
+      // In "Advanced" mode (which is now default), we check every subtask
       for (const task of TASKS) {
-        if (isSimpleMode) {
-          const completedTask = await isTaskCompleted(user, dateString, task.id);
-          if (completedTask) completed.add(task.id);
-        } else {
-          for (const subtask of task.subtasks) {
-            const completedSub = await isTaskCompleted(user, dateString, task.id, subtask.id);
-            if (completedSub) completed.add(`${task.id}-${subtask.id}`);
-          }
+        for (const subtask of task.subtasks) {
+          const completedSub = await isTaskCompleted(user, dateString, task.id, subtask.id);
+          if (completedSub) completed.add(`${task.id}-${subtask.id}`);
         }
       }
       setCompletedTasks(completed);
     };
 
     fetchData();
-  }, [user, dateString, isSimpleMode]);
+  }, [user, dateString]);
 
   const handleToggleTask = async (taskId: string, subtaskId?: string, points?: number) => {
     if (!user || !points) return;
@@ -102,6 +95,49 @@ export const LogTasks: React.FC = () => {
       toast.success(t('task.completed'), {
         description: `+${points} points`,
       });
+    }
+  };
+
+  // New function to handle "Complete All" for a specific category
+  const handleCompleteCategory = async (task: Task) => {
+    if (!user) return;
+
+    let pointsAdded = 0;
+    const newCompleted = new Set(completedTasks);
+    const updates: Promise<any>[] = [];
+
+    // Iterate through all subtasks of the category
+    for (const subtask of task.subtasks) {
+      const key = `${task.id}-${subtask.id}`;
+      
+      // If this specific subtask is NOT already done, log it
+      if (!completedTasks.has(key)) {
+        updates.push(
+          saveTaskLog(user, {
+            date: dateString,
+            taskId: task.id,
+            subtaskId: subtask.id,
+            points: subtask.points,
+            timestamp: Date.now(),
+          })
+        );
+        newCompleted.add(key);
+        pointsAdded += subtask.points;
+      }
+    }
+
+    if (updates.length > 0) {
+      await Promise.all(updates);
+      setCompletedTasks(newCompleted);
+      const newTotal = await calculatePoints();
+      setCurrentPoints(newTotal);
+      // FIXED: Use t(task.id) instead of task.title
+      toast.success(`Completed all ${t(task.id)} tasks!`, {
+        description: `+${pointsAdded} points added`,
+      });
+    } else {
+      // FIXED: Use t(task.id) instead of task.title
+      toast.info(`All tasks in ${t(task.id)} are already completed.`);
     }
   };
 
@@ -150,18 +186,6 @@ export const LogTasks: React.FC = () => {
                   </Button>
                 )}
               </div>
-
-              <div className="flex items-center gap-3">
-                <Label htmlFor="mode-toggle" className="text-sm">
-                  {isSimpleMode ? t('common.simple') : t('common.advanced')}
-                </Label>
-                <Switch
-                  id="mode-toggle"
-                  checked={!isSimpleMode}
-                  onCheckedChange={(checked) => setIsSimpleMode(!checked)}
-                />
-                <Sparkles className="w-4 h-4 text-primary" />
-              </div>
             </div>
           </Card>
 
@@ -179,10 +203,21 @@ export const LogTasks: React.FC = () => {
           <div className="overflow-x-auto pb-4">
             <div className="flex gap-6 min-w-max">
               {TASKS.map((task) => (
-                <div key={task.id} className="w-80 flex-shrink-0">
+                <div key={task.id} className="w-80 flex-shrink-0 flex flex-col gap-3">
+                  {/* Complete All Button */}
+                  <Button 
+                    className="w-full shadow-sm bg-emerald-600 hover:bg-emerald-700 text-white"
+                    onClick={() => handleCompleteCategory(task)}
+                  >
+                    <CheckCheck className="w-4 h-4 mr-2" />
+                    {/* FIXED: Use t(task.id) instead of task.title */}
+                    Complete All {t(task.id)}
+                  </Button>
+
+                  {/* Task Card forces isSimpleMode to false */}
                   <TaskCard
                     task={task}
-                    isSimpleMode={isSimpleMode}
+                    isSimpleMode={false} 
                     completedTasks={completedTasks}
                     onToggleTask={handleToggleTask}
                   />
@@ -190,13 +225,6 @@ export const LogTasks: React.FC = () => {
               ))}
             </div>
           </div>
-
-          <Card className="p-4 bg-gradient-to-r from-primary/5 to-accent/5">
-            <p className="text-sm text-center text-muted-foreground">
-              💡 <strong>Tip:</strong> Use Advanced Mode to track individual tasks within each category
-              for more detailed progress tracking.
-            </p>
-          </Card>
         </div>
       </main>
     </div>
