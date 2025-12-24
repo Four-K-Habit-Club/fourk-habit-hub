@@ -1,13 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import { getFinanceStats } from '../../lib/financeStorage';
 import { Link } from 'react-router-dom';
-import { Plus, Wallet, TrendingDown, PiggyBank, ArrowUpRight, ArrowDownRight, Loader2, X, Calendar, Tag } from 'lucide-react';
+import { Plus, Wallet, TrendingDown, PiggyBank, ArrowUpRight, ArrowDownRight, Loader2, X, Calendar as CalendarIcon, Tag, BarChart3, List } from 'lucide-react';
 import { FinanceRecord } from '@/types/finance';
-import { format } from 'date-fns';
+import { format, startOfDay, endOfDay, isWithinInterval } from 'date-fns';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 export const FinanceDashboard: React.FC = () => {
   const { user } = useAuth();
@@ -21,14 +25,21 @@ export const FinanceDashboard: React.FC = () => {
   // State for interaction (which card is clicked)
   const [selectedCategory, setSelectedCategory] = useState<'income' | 'expense' | 'savings' | null>(null);
 
+  // New states for views and filters
+  const [viewMode, setViewMode] = useState<'graph' | 'detail'>('detail');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined });
+
   useEffect(() => {
     const fetchStats = async () => {
       if (!user) return;
       try {
         setLoading(true);
         setSelectedCategory(null);
+        setCategoryFilter('all');
+        setDateRange({ from: undefined, to: undefined });
+        setViewMode('detail');
         
-        // This destructuring now matches the updated return type of getFinanceStats
         const { stats: newStats, records } = await getFinanceStats(user.id, period, new Date());
         setStats(newStats);
         setAllPeriodRecords(records);
@@ -48,10 +59,60 @@ export const FinanceDashboard: React.FC = () => {
 
   const netBalance = stats.income - stats.expense;
 
-  // Filter records based on selected card
-  const selectedRecords = selectedCategory 
-    ? allPeriodRecords.filter(r => r.type === selectedCategory)
-    : [];
+  // Compute category breakdown
+  const categoryData = useMemo(() => {
+    const map = new Map<string, number>();
+    allPeriodRecords
+      .filter(r => r.type === selectedCategory)
+      .forEach(r => {
+        const cat = r.category || 'Uncategorized';
+        map.set(cat, (map.get(cat) || 0) + r.amount);
+      });
+    return Array.from(map.entries())
+      .map(([category, amount]) => ({ category, amount }))
+      .sort((a, b) => b.amount - a.amount);
+  }, [allPeriodRecords, selectedCategory]);
+
+  // Get unique categories for filter dropdown
+  const availableCategories = useMemo(() => {
+    const cats = new Set<string>();
+    allPeriodRecords
+      .filter(r => r.type === selectedCategory)
+      .forEach(r => cats.add(r.category || 'Uncategorized'));
+    return ['all', ...Array.from(cats).sort()];
+  }, [allPeriodRecords, selectedCategory]);
+
+  // Filtered records for detail view
+  const filteredRecords = useMemo(() => {
+    let records = selectedCategory 
+      ? allPeriodRecords.filter(r => r.type === selectedCategory)
+      : [];
+
+    if (categoryFilter !== 'all') {
+      records = records.filter(r => (r.category || 'Uncategorized') === categoryFilter);
+    }
+
+    if (dateRange.from && dateRange.to) {
+      records = records.filter(r => {
+        const recordDate = new Date(r.date);
+        return isWithinInterval(recordDate, { start: startOfDay(dateRange.from!), end: endOfDay(dateRange.to!) });
+      });
+    }
+
+    // Sort newest first
+    return records.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [allPeriodRecords, selectedCategory, categoryFilter, dateRange]);
+
+  const colors = {
+    income: ['#10b981', '#34d399', '#6ee7b7', '#a7f3d0'],
+    expense: ['#ef4444', '#f87171', '#fca5a5', '#fecaca'],
+    savings: ['#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe'],
+  };
+
+  const getColor = (index: number, type: string) => {
+    const palette = colors[type as keyof typeof colors] || colors.expense;
+    return palette[index % palette.length];
+  };
 
   if (loading && stats.income === 0 && stats.expense === 0) {
     return (
@@ -159,60 +220,158 @@ export const FinanceDashboard: React.FC = () => {
         </Card>
       </div>
 
-      {/* Detail List Section (Only visible when a category is selected) */}
+      {/* Enhanced Detail Section (Graph + Detail with filters) */}
       {selectedCategory && (
         <Card className="p-0 overflow-hidden border animate-in slide-in-from-top-4 duration-300">
-          <div className={`p-4 border-b flex items-center justify-between ${
+          <div className={`p-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
             selectedCategory === 'income' ? 'bg-emerald-50/50' : 
             selectedCategory === 'expense' ? 'bg-red-50/50' : 'bg-blue-50/50'
           }`}>
-            <h3 className="font-semibold capitalize flex items-center gap-2">
-              <span className={`w-2 h-2 rounded-full ${
-                 selectedCategory === 'income' ? 'bg-emerald-500' : 
-                 selectedCategory === 'expense' ? 'bg-red-500' : 'bg-blue-500'
-              }`} />
-              {period} {selectedCategory} Details
-            </h3>
-            <Button variant="ghost" size="sm" onClick={() => setSelectedCategory(null)}>
-              <X className="w-4 h-4" />
-            </Button>
+            <div className="flex items-center justify-between w-full sm:w-auto">
+              <h3 className="font-semibold capitalize flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full ${
+                   selectedCategory === 'income' ? 'bg-emerald-500' : 
+                   selectedCategory === 'expense' ? 'bg-red-500' : 'bg-blue-500'
+                }`} />
+                {period} {selectedCategory} Breakdown
+              </h3>
+              <Button variant="ghost" size="sm" onClick={() => setSelectedCategory(null)}>
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+
+            {/* View Mode Tabs */}
+            <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'graph' | 'detail')} className="w-full sm:w-auto">
+              <TabsList className="grid w-full grid-cols-2 max-w-xs">
+                <TabsTrigger value="graph" className="flex items-center gap-2">
+                  <BarChart3 className="w-4 h-4" /> Graph
+                </TabsTrigger>
+                <TabsTrigger value="detail" className="flex items-center gap-2">
+                  <List className="w-4 h-4" /> Detail
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
           </div>
-          
-          <div className="max-h-[400px] overflow-y-auto">
-            {selectedRecords.length > 0 ? (
-              <div className="divide-y">
-                {selectedRecords.map((record) => (
-                  <div key={record.id} className="p-4 hover:bg-muted/50 transition-colors flex items-center justify-between">
-                    <div className="space-y-1">
-                      <div className="font-medium flex items-center gap-2">
-                        {record.description || record.category}
-                      </div>
-                      <div className="text-xs text-muted-foreground flex items-center gap-3">
-                        <span className="flex items-center gap-1">
-                          <Calendar className="w-3 h-3" />
-                          {format(new Date(record.date), 'MMM dd, yyyy')}
-                        </span>
-                        <span className="flex items-center gap-1 bg-muted px-1.5 py-0.5 rounded-full">
-                          <Tag className="w-3 h-3" />
-                          {record.category}
-                        </span>
-                      </div>
-                    </div>
-                    <div className={`font-bold ${
-                      record.type === 'income' ? 'text-emerald-600' : 
-                      record.type === 'expense' ? 'text-red-600' : 'text-blue-600'
-                    }`}>
-                      {record.type === 'expense' ? '-' : '+'}{formatCurrency(record.amount)}
-                    </div>
-                  </div>
-                ))}
-              </div>
+
+          <TabsContent value="graph" className="p-6 mt-0">
+            {categoryData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={400}>
+                <BarChart data={categoryData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis 
+                    dataKey="category" 
+                    angle={-45} 
+                    textAnchor="end" 
+                    height={80} 
+                    tick={{ fontSize: 12 }}
+                  />
+                  <YAxis tickFormatter={(value) => `KES ${value / 1000}k`} />
+                  <Tooltip 
+                    formatter={(value: number) => formatCurrency(value)}
+                    labelFormatter={(label) => `Category: ${label}`}
+                  />
+                  <Bar dataKey="amount" radius={[8, 8, 0, 0]}>
+                    {categoryData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={getColor(index, selectedCategory)} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
             ) : (
-              <div className="p-8 text-center text-muted-foreground">
-                No {selectedCategory} records found for this {period}.
+              <div className="h-[400px] flex items-center justify-center text-muted-foreground">
+                No data available for this period.
               </div>
             )}
-          </div>
+          </TabsContent>
+
+          <TabsContent value="detail" className="mt-0">
+            {/* Filters Row */}
+            <div className="p-4 border-b bg-muted/30 flex flex-col sm:flex-row gap-4">
+              <div className="flex items-center gap-2 flex-1">
+                <Tag className="w-5 h-5 text-muted-foreground" />
+                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="All Categories" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    {availableCategories.filter(c => c !== 'all').map(cat => (
+                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-center gap-2 flex-1">
+                <CalendarIcon className="w-5 h-5 text-muted-foreground" />
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full justify-start text-left font-normal">
+                      {dateRange.from && dateRange.to ? (
+                        `${format(dateRange.from, 'MMM dd')} - ${format(dateRange.to, 'MMM dd, yyyy')}`
+                      ) : (
+                        <span>Pick a date range</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="range"
+                      selected={{ from: dateRange.from, to: dateRange.to }}
+                      onSelect={(range: any) => setDateRange({ from: range?.from, to: range?.to })}
+                      numberOfMonths={2}
+                      className="rounded-md border"
+                    />
+                  </PopoverContent>
+                </Popover>
+                {(dateRange.from || dateRange.to) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setDateRange({ from: undefined, to: undefined })}
+                  >
+                    Clear
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            <div className="max-h-[500px] overflow-y-auto">
+              {filteredRecords.length > 0 ? (
+                <div className="divide-y">
+                  {filteredRecords.map((record) => (
+                    <div key={record.id} className="p-4 hover:bg-muted/50 transition-colors flex items-center justify-between">
+                      <div className="space-y-1">
+                        <div className="font-medium flex items-center gap-2">
+                          {record.description || record.category}
+                        </div>
+                        <div className="text-xs text-muted-foreground flex items-center gap-3">
+                          <span className="flex items-center gap-1">
+                            <Calendar className="w-3 h-3" />
+                            {format(new Date(record.date), 'MMM dd, yyyy')}
+                          </span>
+                          <span className="flex items-center gap-1 bg-muted px-1.5 py-0.5 rounded-full">
+                            <Tag className="w-3 h-3" />
+                            {record.category || 'Uncategorized'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className={`font-bold ${
+                        record.type === 'income' ? 'text-emerald-600' : 
+                        record.type === 'expense' ? 'text-red-600' : 'text-blue-600'
+                      }`}>
+                        {record.type === 'expense' ? '-' : '+'}{formatCurrency(record.amount)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-8 text-center text-muted-foreground">
+                  No transactions match the selected filters.
+                </div>
+              )}
+            </div>
+          </TabsContent>
         </Card>
       )}
 
