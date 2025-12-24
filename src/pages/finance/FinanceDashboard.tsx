@@ -1,3 +1,4 @@
+//pages/finance/FinanceDashboard.tsx
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card } from '@/components/ui/card';
@@ -8,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { getFinanceStats } from '../../lib/financeStorage';
 import { Link } from 'react-router-dom';
-import { Plus, Wallet, TrendingDown, PiggyBank, ArrowUpRight, ArrowDownRight, Loader2, X, Calendar as CalendarIcon, Tag, BarChart3, List } from 'lucide-react';
+import { Plus, Wallet, TrendingDown, PiggyBank, ArrowUpRight, ArrowDownRight, Loader2, X, Calendar as CalendarIcon, Tag, BarChart3, List, ChevronLeft } from 'lucide-react';
 import { FinanceRecord } from '@/types/finance';
 import { format, startOfDay, endOfDay, isWithinInterval } from 'date-fns';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
@@ -17,15 +18,11 @@ export const FinanceDashboard: React.FC = () => {
   const { user } = useAuth();
   const [period, setPeriod] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('monthly');
   
-  // State for data
   const [stats, setStats] = useState({ income: 0, expense: 0, savings: 0 });
   const [allPeriodRecords, setAllPeriodRecords] = useState<FinanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // State for interaction (which card is clicked)
   const [selectedCategory, setSelectedCategory] = useState<'income' | 'expense' | 'savings' | null>(null);
-
-  // New states for views and filters
   const [viewMode, setViewMode] = useState<'graph' | 'detail'>('detail');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined });
@@ -59,21 +56,6 @@ export const FinanceDashboard: React.FC = () => {
 
   const netBalance = stats.income - stats.expense;
 
-  // Compute category breakdown
-  const categoryData = useMemo(() => {
-    const map = new Map<string, number>();
-    allPeriodRecords
-      .filter(r => r.type === selectedCategory)
-      .forEach(r => {
-        const cat = r.category || 'Uncategorized';
-        map.set(cat, (map.get(cat) || 0) + r.amount);
-      });
-    return Array.from(map.entries())
-      .map(([category, amount]) => ({ category, amount }))
-      .sort((a, b) => b.amount - a.amount);
-  }, [allPeriodRecords, selectedCategory]);
-
-  // Get unique categories for filter dropdown
   const availableCategories = useMemo(() => {
     const cats = new Set<string>();
     allPeriodRecords
@@ -82,7 +64,6 @@ export const FinanceDashboard: React.FC = () => {
     return ['all', ...Array.from(cats).sort()];
   }, [allPeriodRecords, selectedCategory]);
 
-  // Filtered records for detail view
   const filteredRecords = useMemo(() => {
     let records = selectedCategory 
       ? allPeriodRecords.filter(r => r.type === selectedCategory)
@@ -99,9 +80,31 @@ export const FinanceDashboard: React.FC = () => {
       });
     }
 
-    // Sort newest first
     return records.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [allPeriodRecords, selectedCategory, categoryFilter, dateRange]);
+
+  // COMBINE LOGIC: Use a Map to aggregate amounts by trimmed label
+  const graphData = useMemo(() => {
+    const groupKey = categoryFilter === 'all' ? 'category' : 'description';
+    const map = new Map<string, number>();
+
+    filteredRecords.forEach(r => {
+      // 1. Get the raw value and trim whitespace to merge duplicates like "Chapati " and "Chapati"
+      let label = (r[groupKey as keyof FinanceRecord] as string || '').trim();
+      
+      // 2. Fallback: if description is empty, use the category name
+      if (!label) {
+        label = groupKey === 'category' ? 'Uncategorized' : (r.category || 'Unnamed Item');
+      }
+
+      // 3. Aggregate
+      map.set(label, (map.get(label) || 0) + r.amount);
+    });
+
+    return Array.from(map.entries())
+      .map(([label, amount]) => ({ label, amount }))
+      .sort((a, b) => b.amount - a.amount);
+  }, [filteredRecords, categoryFilter]);
 
   const colors = {
     income: ['#10b981', '#34d399', '#6ee7b7', '#a7f3d0'],
@@ -123,7 +126,7 @@ export const FinanceDashboard: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10 px-4 max-w-7xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Finance Overview</h2>
@@ -138,7 +141,7 @@ export const FinanceDashboard: React.FC = () => {
       </div>
 
       <div className="flex justify-center">
-        <Tabs defaultValue="monthly" onValueChange={(v) => setPeriod(v as any)} className="w-full max-w-md">
+        <Tabs value={period} onValueChange={(v) => setPeriod(v as any)} className="w-full max-w-md">
           <TabsList className="grid w-full grid-cols-4 bg-muted/50 p-1">
             <TabsTrigger value="daily">Daily</TabsTrigger>
             <TabsTrigger value="weekly">Weekly</TabsTrigger>
@@ -148,151 +151,64 @@ export const FinanceDashboard: React.FC = () => {
         </Tabs>
       </div>
 
-      {/* Cards Section */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Income Card */}
-        <Card 
-          onClick={() => setSelectedCategory(selectedCategory === 'income' ? null : 'income')}
-          className={`p-6 cursor-pointer transition-all duration-200 ${
-            selectedCategory === 'income' 
-              ? 'ring-2 ring-emerald-500 ring-offset-2 transform scale-[1.02]' 
-              : 'hover:shadow-md hover:-translate-y-1'
-          } bg-gradient-to-br from-emerald-50 to-emerald-100/30 border-emerald-100 shadow-sm`}
-        >
+        <Card onClick={() => setSelectedCategory(selectedCategory === 'income' ? null : 'income')} className={`p-6 cursor-pointer transition-all duration-200 ${selectedCategory === 'income' ? 'ring-2 ring-emerald-500 scale-[1.02]' : 'hover:shadow-md hover:-translate-y-1'} bg-gradient-to-br from-emerald-50 to-emerald-100/30 border-emerald-100`}>
           <div className="flex items-center justify-between mb-4">
-            <div className="p-3 rounded-full bg-emerald-100 text-emerald-600">
-              <Wallet className="w-6 h-6" />
-            </div>
-            <div className="px-2 py-1 rounded-full bg-emerald-100/50 text-emerald-700 text-xs font-medium flex items-center gap-1">
-              <ArrowUpRight className="w-3 h-3" /> Income
-            </div>
+            <div className="p-3 rounded-full bg-emerald-100 text-emerald-600"><Wallet className="w-6 h-6" /></div>
+            <div className="px-2 py-1 rounded-full bg-emerald-100/50 text-emerald-700 text-xs font-medium flex items-center gap-1"><ArrowUpRight className="w-3 h-3" /> Income</div>
           </div>
-          <div>
-            <p className="text-sm font-medium text-muted-foreground capitalize">{period} Income</p>
-            <h3 className="text-3xl font-bold text-emerald-700 mt-1">{formatCurrency(stats.income)}</h3>
-          </div>
+          <p className="text-sm font-medium text-muted-foreground capitalize">{period} Income</p>
+          <h3 className="text-3xl font-bold text-emerald-700 mt-1">{formatCurrency(stats.income)}</h3>
         </Card>
 
-        {/* Expenses Card */}
-        <Card 
-          onClick={() => setSelectedCategory(selectedCategory === 'expense' ? null : 'expense')}
-          className={`p-6 cursor-pointer transition-all duration-200 ${
-            selectedCategory === 'expense' 
-              ? 'ring-2 ring-red-500 ring-offset-2 transform scale-[1.02]' 
-              : 'hover:shadow-md hover:-translate-y-1'
-          } bg-gradient-to-br from-red-50 to-red-100/30 border-red-100 shadow-sm`}
-        >
+        <Card onClick={() => setSelectedCategory(selectedCategory === 'expense' ? null : 'expense')} className={`p-6 cursor-pointer transition-all duration-200 ${selectedCategory === 'expense' ? 'ring-2 ring-red-500 scale-[1.02]' : 'hover:shadow-md hover:-translate-y-1'} bg-gradient-to-br from-red-50 to-red-100/30 border-red-100`}>
           <div className="flex items-center justify-between mb-4">
-            <div className="p-3 rounded-full bg-red-100 text-red-600">
-              <TrendingDown className="w-6 h-6" />
-            </div>
-            <div className="px-2 py-1 rounded-full bg-red-100/50 text-red-700 text-xs font-medium flex items-center gap-1">
-              <ArrowDownRight className="w-3 h-3" /> Expenses
-            </div>
+            <div className="p-3 rounded-full bg-red-100 text-red-600"><TrendingDown className="w-6 h-6" /></div>
+            <div className="px-2 py-1 rounded-full bg-red-100/50 text-red-700 text-xs font-medium flex items-center gap-1"><ArrowDownRight className="w-3 h-3" /> Expenses</div>
           </div>
-          <div>
-            <p className="text-sm font-medium text-muted-foreground capitalize">{period} Expenses</p>
-            <h3 className="text-3xl font-bold text-red-700 mt-1">{formatCurrency(stats.expense)}</h3>
-          </div>
+          <p className="text-sm font-medium text-muted-foreground capitalize">{period} Expenses</p>
+          <h3 className="text-3xl font-bold text-red-700 mt-1">{formatCurrency(stats.expense)}</h3>
         </Card>
 
-        {/* Savings Card */}
-        <Card 
-          onClick={() => setSelectedCategory(selectedCategory === 'savings' ? null : 'savings')}
-          className={`p-6 cursor-pointer transition-all duration-200 ${
-            selectedCategory === 'savings' 
-              ? 'ring-2 ring-blue-500 ring-offset-2 transform scale-[1.02]' 
-              : 'hover:shadow-md hover:-translate-y-1'
-          } bg-gradient-to-br from-blue-50 to-blue-100/30 border-blue-100 shadow-sm`}
-        >
+        <Card onClick={() => setSelectedCategory(selectedCategory === 'savings' ? null : 'savings')} className={`p-6 cursor-pointer transition-all duration-200 ${selectedCategory === 'savings' ? 'ring-2 ring-blue-500 scale-[1.02]' : 'hover:shadow-md hover:-translate-y-1'} bg-gradient-to-br from-blue-50 to-blue-100/30 border-blue-100`}>
           <div className="flex items-center justify-between mb-4">
-            <div className="p-3 rounded-full bg-blue-100 text-blue-600">
-              <PiggyBank className="w-6 h-6" />
-            </div>
-            <div className="px-2 py-1 rounded-full bg-blue-100/50 text-blue-700 text-xs font-medium">
-              Savings
-            </div>
+            <div className="p-3 rounded-full bg-blue-100 text-blue-600"><PiggyBank className="w-6 h-6" /></div>
+            <div className="px-2 py-1 rounded-full bg-blue-100/50 text-blue-700 text-xs font-medium">Savings</div>
           </div>
-          <div>
-            <p className="text-sm font-medium text-muted-foreground capitalize">{period} Savings</p>
-            <h3 className="text-3xl font-bold text-blue-700 mt-1">{formatCurrency(stats.savings)}</h3>
-          </div>
+          <p className="text-sm font-medium text-muted-foreground capitalize">{period} Savings</p>
+          <h3 className="text-3xl font-bold text-blue-700 mt-1">{formatCurrency(stats.savings)}</h3>
         </Card>
       </div>
 
-      {/* Enhanced Detail Section (Graph + Detail with filters) */}
       {selectedCategory && (
         <Card className="p-0 overflow-hidden border animate-in slide-in-from-top-4 duration-300">
-          <div className={`p-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
-            selectedCategory === 'income' ? 'bg-emerald-50/50' : 
-            selectedCategory === 'expense' ? 'bg-red-50/50' : 'bg-blue-50/50'
-          }`}>
-            <div className="flex items-center justify-between w-full sm:w-auto">
-              <h3 className="font-semibold capitalize flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full ${
-                   selectedCategory === 'income' ? 'bg-emerald-500' : 
-                   selectedCategory === 'expense' ? 'bg-red-500' : 'bg-blue-500'
-                }`} />
-                {period} {selectedCategory} Breakdown
-              </h3>
-              <Button variant="ghost" size="sm" onClick={() => setSelectedCategory(null)}>
-                <X className="w-4 h-4" />
-              </Button>
+          <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'graph' | 'detail')} className="w-full">
+            <div className={`p-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${selectedCategory === 'income' ? 'bg-emerald-50/50' : selectedCategory === 'expense' ? 'bg-red-50/50' : 'bg-blue-50/50'}`}>
+              <div className="flex items-center gap-2">
+                {categoryFilter !== 'all' && (
+                  <Button variant="ghost" size="icon" onClick={() => setCategoryFilter('all')} title="Back to categories">
+                    <ChevronLeft className="w-5 h-5" />
+                  </Button>
+                )}
+                <h3 className="font-semibold capitalize flex items-center gap-2 text-lg">
+                  <span className={`w-2.5 h-2.5 rounded-full ${selectedCategory === 'income' ? 'bg-emerald-500' : selectedCategory === 'expense' ? 'bg-red-500' : 'bg-blue-500'}`} />
+                  {categoryFilter === 'all' ? `${period} ${selectedCategory} Breakdown` : `Items in ${categoryFilter}`}
+                </h3>
+              </div>
+              <div className="flex items-center gap-3">
+                <TabsList className="grid grid-cols-2 w-48">
+                  <TabsTrigger value="graph" className="gap-2"><BarChart3 className="w-4 h-4" /> Graph</TabsTrigger>
+                  <TabsTrigger value="detail" className="gap-2"><List className="w-4 h-4" /> Detail</TabsTrigger>
+                </TabsList>
+                <Button variant="ghost" size="sm" onClick={() => setSelectedCategory(null)}><X className="w-4 h-4" /></Button>
+              </div>
             </div>
 
-            {/* View Mode Tabs */}
-            <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'graph' | 'detail')} className="w-full sm:w-auto">
-              <TabsList className="grid w-full grid-cols-2 max-w-xs">
-                <TabsTrigger value="graph" className="flex items-center gap-2">
-                  <BarChart3 className="w-4 h-4" /> Graph
-                </TabsTrigger>
-                <TabsTrigger value="detail" className="flex items-center gap-2">
-                  <List className="w-4 h-4" /> Detail
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
-
-          <TabsContent value="graph" className="p-6 mt-0">
-            {categoryData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={400}>
-                <BarChart data={categoryData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis 
-                    dataKey="category" 
-                    angle={-45} 
-                    textAnchor="end" 
-                    height={80} 
-                    tick={{ fontSize: 12 }}
-                  />
-                  <YAxis tickFormatter={(value) => `KES ${value / 1000}k`} />
-                  <Tooltip 
-                    formatter={(value: number) => formatCurrency(value)}
-                    labelFormatter={(label) => `Category: ${label}`}
-                  />
-                  <Bar dataKey="amount" radius={[8, 8, 0, 0]}>
-                    {categoryData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={getColor(index, selectedCategory)} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-[400px] flex items-center justify-center text-muted-foreground">
-                No data available for this period.
-              </div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="detail" className="mt-0">
-            {/* Filters Row */}
-            <div className="p-4 border-b bg-muted/30 flex flex-col sm:flex-row gap-4">
+            <div className="p-4 border-b bg-muted/20 flex flex-col sm:flex-row gap-4">
               <div className="flex items-center gap-2 flex-1">
-                <Tag className="w-5 h-5 text-muted-foreground" />
+                <Tag className="w-4 h-4 text-muted-foreground" />
                 <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="All Categories" />
-                  </SelectTrigger>
+                  <SelectTrigger className="w-full"><SelectValue placeholder="All Categories" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Categories</SelectItem>
                     {availableCategories.filter(c => c !== 'all').map(cat => (
@@ -301,114 +217,115 @@ export const FinanceDashboard: React.FC = () => {
                   </SelectContent>
                 </Select>
               </div>
-
               <div className="flex items-center gap-2 flex-1">
-                <CalendarIcon className="w-5 h-5 text-muted-foreground" />
+                <CalendarIcon className="w-4 h-4 text-muted-foreground" />
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button variant="outline" className="w-full justify-start text-left font-normal">
-                      {dateRange.from && dateRange.to ? (
-                        `${format(dateRange.from, 'MMM dd')} - ${format(dateRange.to, 'MMM dd, yyyy')}`
-                      ) : (
-                        <span>Pick a date range</span>
-                      )}
+                      {dateRange.from && dateRange.to ? `${format(dateRange.from, 'MMM dd')} - ${format(dateRange.to, 'MMM dd, yyyy')}` : <span>Pick a date range</span>}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="range"
-                      selected={{ from: dateRange.from, to: dateRange.to }}
-                      onSelect={(range: any) => setDateRange({ from: range?.from, to: range?.to })}
-                      numberOfMonths={2}
-                      className="rounded-md border"
-                    />
+                  <PopoverContent className="w-auto p-0" align="end">
+                    <Calendar mode="range" selected={{ from: dateRange.from, to: dateRange.to }} onSelect={(range: any) => setDateRange({ from: range?.from, to: range?.to })} numberOfMonths={2} />
                   </PopoverContent>
                 </Popover>
-                {(dateRange.from || dateRange.to) && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setDateRange({ from: undefined, to: undefined })}
-                  >
-                    Clear
-                  </Button>
-                )}
               </div>
             </div>
 
-            <div className="max-h-[500px] overflow-y-auto">
-              {filteredRecords.length > 0 ? (
-                <div className="divide-y">
-                  {filteredRecords.map((record) => (
-                    <div key={record.id} className="p-4 hover:bg-muted/50 transition-colors flex items-center justify-between">
-                      <div className="space-y-1">
-                        <div className="font-medium flex items-center gap-2">
-                          {record.description || record.category}
-                        </div>
-                        <div className="text-xs text-muted-foreground flex items-center gap-3">
-                          <span className="flex items-center gap-1">
-                            <Calendar className="w-3 h-3" />
-                            {format(new Date(record.date), 'MMM dd, yyyy')}
-                          </span>
-                          <span className="flex items-center gap-1 bg-muted px-1.5 py-0.5 rounded-full">
-                            <Tag className="w-3 h-3" />
-                            {record.category || 'Uncategorized'}
-                          </span>
-                        </div>
-                      </div>
-                      <div className={`font-bold ${
-                        record.type === 'income' ? 'text-emerald-600' : 
-                        record.type === 'expense' ? 'text-red-600' : 'text-blue-600'
-                      }`}>
-                        {record.type === 'expense' ? '-' : '+'}{formatCurrency(record.amount)}
-                      </div>
-                    </div>
-                  ))}
+            <TabsContent value="graph" className="m-0 p-6">
+              {graphData.length > 0 ? (
+                <div className="h-[450px] w-full min-w-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={graphData} margin={{ top: 20, right: 30, left: 40, bottom: 100 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.5} />
+                      <XAxis 
+                        dataKey="label" 
+                        angle={-45} 
+                        textAnchor="end" 
+                        height={100} 
+                        interval={0}
+                        tick={{ fontSize: 11, fill: 'currentColor' }}
+                      />
+                      <YAxis 
+                        tickFormatter={(value) => `KSh ${value > 999 ? (value/1000).toFixed(0) + 'k' : value}`} 
+                        tick={{ fontSize: 11 }}
+                        width={60}
+                      />
+                      <Tooltip 
+                        cursor={{fill: 'rgba(0,0,0,0.05)'}}
+                        formatter={(value: number) => [formatCurrency(value), categoryFilter === 'all' ? "Category Total" : "Item Total"]}
+                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                      />
+                      <Bar 
+                        dataKey="amount" 
+                        radius={[4, 4, 0, 0]} 
+                        barSize={40}
+                        onClick={(data) => {
+                          if (categoryFilter === 'all') {
+                            setCategoryFilter(data.label);
+                          }
+                        }}
+                        style={{ cursor: categoryFilter === 'all' ? 'pointer' : 'default' }}
+                      >
+                        {graphData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={getColor(index, selectedCategory)} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                  {categoryFilter === 'all' && (
+                    <p className="text-center text-xs text-muted-foreground mt-2 italic">Tip: Click a bar to see individual items</p>
+                  )}
                 </div>
               ) : (
-                <div className="p-8 text-center text-muted-foreground">
-                  No transactions match the selected filters.
+                <div className="h-[300px] flex flex-col items-center justify-center text-muted-foreground">
+                  <BarChart3 className="w-12 h-12 mb-2 opacity-10" />
+                  <p>No data matches the selected filters.</p>
                 </div>
               )}
-            </div>
-          </TabsContent>
+            </TabsContent>
+            
+            <TabsContent value="detail" className="m-0">
+              <div className="max-h-[500px] overflow-y-auto divide-y">
+                {filteredRecords.length > 0 ? filteredRecords.map((record) => (
+                  <div key={record.id} className="p-4 hover:bg-muted/50 transition-colors flex items-center justify-between">
+                    <div className="space-y-1">
+                      <div className="font-medium">{record.description || record.category}</div>
+                      <div className="text-xs text-muted-foreground flex items-center gap-3">
+                        <span className="flex items-center gap-1"><CalendarIcon className="w-3 h-3" />{format(new Date(record.date), 'MMM dd, yyyy')}</span>
+                        <span className="bg-muted px-1.5 py-0.5 rounded-full"><Tag className="w-3 h-3" />{record.category || 'Uncategorized'}</span>
+                      </div>
+                    </div>
+                    <div className={`font-bold ${record.type === 'expense' ? 'text-red-600' : 'text-emerald-600'}`}>
+                      {record.type === 'expense' ? '-' : '+'}{formatCurrency(record.amount)}
+                    </div>
+                  </div>
+                )) : <div className="p-12 text-center text-muted-foreground">No transactions match filters.</div>}
+              </div>
+            </TabsContent>
+          </Tabs>
         </Card>
       )}
 
-      {/* Financial Health Summary */}
       <Card className="p-6 bg-card border shadow-sm">
-        <h3 className="font-semibold mb-6 flex items-center gap-2">
-          <span className="w-1 h-6 bg-primary rounded-full"></span>
-          Financial Health Summary
-        </h3>
+        <h3 className="font-semibold mb-6 flex items-center gap-2"><span className="w-1 h-6 bg-primary rounded-full"></span>Financial Health Summary</h3>
         <div className="space-y-6">
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Net Balance</span>
-              <span className={`font-bold ${netBalance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                {formatCurrency(netBalance)}
-              </span>
+              <span className={`font-bold ${netBalance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{formatCurrency(netBalance)}</span>
             </div>
             <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-              <div 
-                className={`h-full ${netBalance >= 0 ? 'bg-emerald-500' : 'bg-red-500'}`}
-                style={{ width: `${stats.income > 0 ? Math.min(Math.abs(netBalance / stats.income) * 100, 100) : 0}%` }}
-              ></div>
+              <div className={`h-full ${netBalance >= 0 ? 'bg-emerald-500' : 'bg-red-500'}`} style={{ width: `${stats.income > 0 ? Math.min(Math.abs(netBalance / stats.income) * 100, 100) : 0}%` }}></div>
             </div>
           </div>
-
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Savings Rate</span>
-              <span className="font-medium">
-                {stats.income > 0 ? Math.round((stats.savings / stats.income) * 100) : 0}%
-              </span>
+              <span className="font-medium">{stats.income > 0 ? Math.round((stats.savings / stats.income) * 100) : 0}%</span>
             </div>
             <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-blue-500"
-                style={{ width: `${stats.income > 0 ? Math.min((stats.savings / stats.income) * 100, 100) : 0}%` }}
-              ></div>
+              <div className="h-full bg-blue-500" style={{ width: `${stats.income > 0 ? Math.min((stats.savings / stats.income) * 100, 100) : 0}%` }}></div>
             </div>
           </div>
         </div>
