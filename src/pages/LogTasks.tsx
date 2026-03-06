@@ -59,26 +59,43 @@ export const LogTasks: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    if (!user) return;
+  // Inside LogTasks.tsx -> useEffect
+useEffect(() => {
+  if (!user) return;
 
-    const fetchData = async () => {
-      const completed = new Set<string>();
-      
-      const points = await calculatePoints();
-      setCurrentPoints(points);
+  const fetchData = async () => {
+    // 1. Fetch all logs for this specific date string once
+    const logs = await getTaskLogsForDate(user, dateString);
+    
+    // 2. Calculate points from these logs
+    const uniqueLogs = new Map();
+    const advancedLogs = logs.filter(log => log.subtaskId);
+    advancedLogs.forEach(log => {
+      const key = `${log.taskId}-${log.subtaskId}`;
+      if (!uniqueLogs.has(key)) uniqueLogs.set(key, log);
+    });
 
-      for (const task of TASKS) {
-        for (const subtask of task.subtasks) {
-          const completedSub = await isTaskCompleted(user, dateString, task.id, subtask.id);
-          if (completedSub) completed.add(`${task.id}-${subtask.id}`);
-        }
+    let total = 0;
+    uniqueLogs.forEach(log => {
+      total += (Number(log.points) || 0);
+    });
+    setCurrentPoints(total);
+
+    // 3. Populate the "Ticks" (completed tasks) directly from the logs
+    const completed = new Set<string>();
+    logs.forEach(log => {
+      if (log.subtaskId) {
+        completed.add(`${log.taskId}-${log.subtaskId}`);
+      } else {
+        completed.add(log.taskId);
       }
-      setCompletedTasks(completed);
-    };
+    });
 
-    fetchData();
-  }, [user, dateString]);
+    setCompletedTasks(completed);
+  };
+
+  fetchData();
+}, [user, dateString]); // Triggers every time the user or calendar date changes
 
   const handleToggleTask = async (taskId: string, subtaskId?: string, points?: number) => {
     if (!user || !points) return;
