@@ -45,12 +45,15 @@ export const saveFinanceRecord = async (
 
 export const getFinanceStats = async (
   userId: string, 
-  period: 'daily' | 'weekly' | 'monthly' | 'yearly', 
+  period: 'daily' | 'weekly' | 'monthly' | 'yearly' | 'all', // Added 'all' type
   dateReference: Date = new Date()
 ) => {
   const records = await getFinanceRecords(userId);
   
   const filtered = records.filter(record => {
+    // If period is 'all', include every record
+    if (period === 'all') return true;
+
     const recordDate = new Date(record.date);
     const refDate = new Date(dateReference);
     
@@ -92,6 +95,5 @@ export const getFinanceStats = async (
     return acc;
   }, { income: 0, expense: 0, savings: 0 });
 
-  // Return both stats and records to fix the TypeScript error
   return { stats, records: filtered };
 };
