@@ -1,4 +1,3 @@
-// src/App.tsx
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -42,19 +41,16 @@ const ProtectedRoute = () => {
     );
   }
   
-  // If not logged in, redirect to auth. If logged in, render the child routes (Outlet)
   return user ? <Outlet /> : <Navigate to="/auth" replace />;
 };
 
 const MainLayout = () => {
-  const { user, logout } = useAuth();
+  const { logout } = useAuth();
   const { t } = useLanguage();
   const location = useLocation();
   const navigate = useNavigate();
   
   const isFinance = location.pathname.startsWith('/finance');
-
-  if (!user) return null;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
@@ -115,8 +111,7 @@ const MainLayout = () => {
       </header>
 
       <main className="container mx-auto px-4 py-8">
-        {/* Outlet renders the specific page content based on the URL */}
-        <Outlet />
+        <Outlet /> 
       </main>
     </div>
   );
@@ -133,24 +128,24 @@ const App = () => (
         <AuthProvider>
           <LanguageProvider>
             <Routes>
-              {/* Public Route */}
+              {/* Public Routes */}
               <Route path="/auth" element={<Auth />} />
               
-              {/* All Protected Routes grouped together */}
+              {/* Protected Routes */}
               <Route element={<ProtectedRoute />}>
                 <Route element={<MainLayout />}>
-                  {/* Household Routes */}
+                  {/* Household paths */}
                   <Route path="/" element={<HouseholdDashboard />} />
                   <Route path="/log" element={<LogTasks />} />
                   <Route path="/history" element={<History />} />
 
-                  {/* Finance Routes */}
+                  {/* Finance paths */}
                   <Route path="/finance" element={<FinanceDashboard />} />
                   <Route path="/finance/log" element={<LogFinance />} />
                 </Route>
               </Route>
 
-              {/* Catch-all 404 */}
+              {/* 404 Catch-all */}
               <Route path="*" element={<NotFound />} />
             </Routes>
           </LanguageProvider>
