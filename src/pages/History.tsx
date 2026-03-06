@@ -6,9 +6,9 @@ import { Navigation } from '@/components/Navigation';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { getAllDailyProgress } from '@/lib/storage';
-import { DailyProgress } from '@/types/tasks';
+import { DailyProgress, TASKS } from '@/types/tasks'; // Imported TASKS to ensure consistency
 import { format } from 'date-fns';
-import { Award, TrendingUp, Calendar, CheckCircle2, ArrowRight, Tag } from 'lucide-react';
+import { Award, TrendingUp, Calendar, CheckCircle2, ArrowRight, ClipboardCheck } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -34,14 +34,20 @@ export const History: React.FC = () => {
   }, [user]);
 
   /**
-   * Helper to get translated names.
-   * Logic: If subtaskId exists, translate that for the task name.
-   * Translate taskId for the Category name.
+   * getTaskDisplay logic
+   * This matches the logic in LogTasks.tsx
    */
   const getTaskDisplay = (taskId: string, subtaskId?: string) => {
+    // Translate the Category (e.g., "kuoga" -> "Bathing")
+    const categoryName = t(taskId);
+    
+    // Translate the Task (e.g., "teeth" -> "Brushing teeth properly")
+    // If no subtask exists, we use the category name
+    const taskName = subtaskId ? t(subtaskId) : categoryName;
+
     return {
-      category: t(taskId), // e.g., "Bathing"
-      taskName: subtaskId ? t(subtaskId) : t(taskId) // e.g., "Brushing teeth properly"
+      category: categoryName,
+      task: taskName
     };
   };
 
@@ -63,6 +69,7 @@ export const History: React.FC = () => {
             </p>
           </div>
 
+          {/* Statistics Section */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card className="p-6">
               <div className="flex items-center gap-3">
@@ -101,6 +108,7 @@ export const History: React.FC = () => {
             </Card>
           </div>
 
+          {/* History List */}
           <div className="space-y-4">
             {history.length === 0 ? (
               <Card className="p-8 text-center">
@@ -121,7 +129,7 @@ export const History: React.FC = () => {
                         {format(new Date(day.date), 'EEEE, MMMM d, yyyy')}
                       </h3>
                       <p className="text-sm text-muted-foreground flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3 text-success" />
+                        <CheckCircle2 className="w-4 h-3 text-success" />
                         {day.logs.length} task{day.logs.length !== 1 ? 's' : ''} completed
                       </p>
                     </div>
@@ -133,18 +141,15 @@ export const History: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Preview of tasks for this day */}
+                  {/* Summary Preview: Displays sentences, not IDs */}
                   <div className="flex flex-wrap gap-2">
-                    {day.logs.slice(0, 5).map((log, index) => {
-                      const { taskName } = getTaskDisplay(log.taskId, log.subtaskId);
-                      return (
-                        <Badge key={index} variant="secondary" className="font-normal bg-secondary/30">
-                          {taskName}
-                        </Badge>
-                      );
-                    })}
-                    {day.logs.length > 5 && (
-                      <Badge variant="outline">+{day.logs.length - 5} more</Badge>
+                    {day.logs.slice(0, 4).map((log, index) => (
+                      <Badge key={index} variant="secondary" className="font-normal">
+                        {getTaskDisplay(log.taskId, log.subtaskId).task}
+                      </Badge>
+                    ))}
+                    {day.logs.length > 4 && (
+                      <Badge variant="outline">+{day.logs.length - 4} more</Badge>
                     )}
                   </div>
                 </Card>
@@ -155,12 +160,12 @@ export const History: React.FC = () => {
 
         {/* Detailed Breakdown Dialog */}
         <Dialog open={!!selectedDay} onOpenChange={() => setSelectedDay(null)}>
-          <DialogContent className="sm:max-w-[450px] max-h-[85vh] flex flex-col">
+          <DialogContent className="sm:max-w-[450px] max-h-[80vh] overflow-y-auto">
             {selectedDay && (
               <>
                 <DialogHeader>
                   <DialogTitle className="text-2xl font-bold flex items-center gap-2">
-                    <Award className="w-6 h-6 text-primary" />
+                    <ClipboardCheck className="w-6 h-6 text-primary" />
                     Day Summary
                   </DialogTitle>
                   <DialogDescription className="text-lg font-medium">
@@ -168,31 +173,30 @@ export const History: React.FC = () => {
                   </DialogDescription>
                 </DialogHeader>
 
-                <div className="py-4 space-y-4 overflow-hidden flex flex-col">
+                <div className="py-4 space-y-6">
                   <div className="bg-success/5 border border-success/20 rounded-xl p-4 text-center">
-                    <p className="text-sm text-muted-foreground uppercase tracking-wider font-semibold">Total Points Earned</p>
+                    <p className="text-xs text-muted-foreground uppercase tracking-widest font-bold mb-1">Total Points</p>
                     <p className="text-4xl font-black text-success">{selectedDay.totalPoints}</p>
                   </div>
 
-                  <div className="space-y-2 flex flex-col overflow-hidden">
-                    <p className="text-sm font-bold text-muted-foreground px-1 flex items-center gap-2">
-                      <Tag className="w-3 h-3" />
-                      Task Details
-                    </p>
-                    <div className="overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                  <div className="space-y-3">
+                    <p className="text-sm font-bold text-muted-foreground px-1">Task Details</p>
+                    <div className="space-y-2">
                       {selectedDay.logs.map((log, index) => {
-                        const { category, taskName } = getTaskDisplay(log.taskId, log.subtaskId);
+                        const details = getTaskDisplay(log.taskId, log.subtaskId);
                         return (
-                          <div key={index} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border border-border">
+                          <div key={index} className="flex items-center justify-between p-3 bg-muted/40 rounded-lg border border-border/50">
                             <div className="flex flex-col">
-                              <span className="text-[10px] uppercase font-bold text-primary tracking-tight">
-                                {category}
+                              <span className="text-[10px] uppercase font-bold text-primary/70">
+                                {details.category}
                               </span>
-                              <span className="font-medium text-sm text-foreground">
-                                {taskName}
+                              <span className="font-semibold text-sm leading-tight">
+                                {details.task}
                               </span>
                             </div>
-                            <span className="font-mono font-bold text-success">+{log.points}</span>
+                            <span className="font-mono font-bold text-success text-sm">
+                              +{log.points}
+                            </span>
                           </div>
                         );
                       })}
@@ -200,7 +204,7 @@ export const History: React.FC = () => {
                   </div>
                 </div>
                 
-                <div className="bg-primary/5 p-4 rounded-lg text-center mt-auto">
+                <div className="bg-primary/5 p-4 rounded-lg text-center border border-primary/10">
                   <p className="text-xs text-primary font-medium italic">
                     "Excellent work! Every task completed is a step toward a better home."
                   </p>
