@@ -1,14 +1,25 @@
 // src/pages/History.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Navigation } from '@/components/Navigation';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getAllDailyProgress } from '@/lib/storage';
 import { DailyProgress } from '@/types/tasks';
-import { format } from 'date-fns';
-import { Award, TrendingUp, Calendar, CheckCircle2, ArrowRight, Tag } from 'lucide-react';
+import { format, subDays, isAfter, startOfWeek, startOfMonth, startOfYear } from 'date-fns';
+import { 
+  Award, 
+  TrendingUp, 
+  Calendar, 
+  CheckCircle2, 
+  ArrowRight, 
+  Tag, 
+  Download,
+  BarChart3
+} from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -16,19 +27,32 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { TASKS, Task } from '@/types/tasks';
+import { TASKS } from '@/types/tasks';
+import * as XLSX from 'xlsx';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell
+} from 'recharts';
+
+type TimeRange = 'week' | 'month' | 'year' | 'all';
 
 export const History: React.FC = () => {
   const { user } = useAuth();
   const { t, language } = useLanguage();
   const [history, setHistory] = useState<DailyProgress[]>([]);
   const [selectedDay, setSelectedDay] = useState<DailyProgress | null>(null);
+  const [timeRange, setTimeRange] = useState<TimeRange>('all');
 
   useEffect(() => {
     const fetchHistory = async () => {
       if (!user) return;
       const data = await getAllDailyProgress(user);
-      // Sort newest first
       setHistory(data.sort((a, b) => b.date.localeCompare(a.date)));
     };
     fetchHistory();
@@ -40,11 +64,6 @@ export const History: React.FC = () => {
     return nameEn;
   };
 
-  /**
-   * Helper to get translated names.
-   * Logic: If subtaskId exists, translate that for the task name.
-   * Translate taskId for the Category name.
-   */
   const getTaskDisplay = (taskId: string, subtaskId?: string) => {
     const task = TASKS.find(t => t.id === taskId);
     if (!task) {
@@ -74,8 +93,68 @@ export const History: React.FC = () => {
     };
   };
 
+  // Logic for filtering history based on Tabs
+  const filteredHistory = useMemo(() => {
+    const now = new Date();
+    let startDate: Date | null = null;
+
+    if (timeRange === 'week') startDate = startOfWeek(now);
+    else if (timeRange === 'month') startDate = startOfMonth(now);
+    else if (timeRange === 'year') startDate = startOfYear(now);
+    else return history;
+
+    return history.filter(day => isAfter(new Date(day.date), startDate!));
+  }, [history, timeRange]);
+
+  // Logic for analytics charts
+  const chartData = useMemo(() => {
+    const habitCounts: Record<string, number> = {};
+    const categoryCounts: Record<string, number> = {};
+
+    filteredHistory.forEach(day => {
+      day.logs.forEach(log => {
+        const { taskName, category } = getTaskDisplay(log.taskId, log.subtaskId);
+        habitCounts[taskName] = (habitCounts[taskName] || 0) + 1;
+        categoryCounts[category] = (categoryCounts[category] || 0) + 1;
+      });
+    });
+
+    const mostRepeatedHabits = Object.entries(habitCounts)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+
+    const habitsByCategory = Object.entries(categoryCounts)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+
+    return { mostRepeatedHabits, habitsByCategory };
+  }, [filteredHistory, language]);
+
+  const exportToExcel = () => {
+    const exportData = history.flatMap(day => 
+      day.logs.map(log => {
+        const { category, taskName } = getTaskDisplay(log.taskId, log.subtaskId);
+        return {
+          Date: day.date,
+          Category: category,
+          Task: taskName,
+          Points: log.points,
+          User: user?.email || 'Unknown'
+        };
+      })
+    );
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Task History");
+    XLSX.writeFile(workbook, `Household_History_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+  };
+
   const totalAllTime = history.reduce((sum, day) => sum + day.totalPoints, 0);
   const averageDaily = history.length > 0 ? Math.round(totalAllTime / history.length) : 0;
+
+  const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
@@ -83,13 +162,19 @@ export const History: React.FC = () => {
       
       <main className="container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto space-y-6">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground mb-2">
-              {t('nav.history')}
-            </h1>
-            <p className="text-muted-foreground">
-              View your household task completion history and statistics
-            </p>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-bold text-foreground mb-2">
+                {t('nav.history')}
+              </h1>
+              <p className="text-muted-foreground">
+                View your household task completion history and statistics
+              </p>
+            </div>
+            <Button onClick={exportToExcel} variant="outline" className="flex items-center gap-2">
+              <Download className="w-4 h-4" />
+              Export Excel
+            </Button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -130,59 +215,118 @@ export const History: React.FC = () => {
             </Card>
           </div>
 
-          <div className="space-y-4">
-            {history.length === 0 ? (
-              <Card className="p-8 text-center">
-                <p className="text-muted-foreground">
-                  No history yet. Start logging your tasks to see your progress here!
-                </p>
-              </Card>
-            ) : (
-              history.map((day) => (
-                <Card 
-                  key={day.date} 
-                  className="p-6 hover:shadow-md transition-all cursor-pointer group active:scale-[0.99]"
-                  onClick={() => setSelectedDay(day)}
-                >
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h3 className="font-semibold text-lg group-hover:text-primary transition-colors">
-                        {format(new Date(day.date), 'EEEE, MMMM d, yyyy')}
-                      </h3>
-                      <p className="text-sm text-muted-foreground flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3 text-success" />
-                        {day.logs.length} task{day.logs.length !== 1 ? 's' : ''} completed
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Badge className="text-lg px-4 py-2 bg-gradient-success">
-                        {day.totalPoints} pts
-                      </Badge>
-                      <ArrowRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </div>
-                  </div>
+          <Tabs defaultValue="all" className="w-full" onValueChange={(v) => setTimeRange(v as TimeRange)}>
+            <div className="flex items-center justify-between mb-4">
+              <TabsList>
+                <TabsTrigger value="week">Week</TabsTrigger>
+                <TabsTrigger value="month">Month</TabsTrigger>
+                <TabsTrigger value="year">Year</TabsTrigger>
+                <TabsTrigger value="all">All Time</TabsTrigger>
+              </TabsList>
+            </div>
 
-                  {/* Preview of tasks for this day */}
-                  <div className="flex flex-wrap gap-2">
-                    {day.logs.slice(0, 5).map((log, index) => {
-                      const { taskName } = getTaskDisplay(log.taskId, log.subtaskId);
-                      return (
-                        <Badge key={index} variant="secondary" className="font-normal bg-secondary/50">
-                          {taskName}
-                        </Badge>
-                      );
-                    })}
-                    {day.logs.length > 5 && (
-                      <Badge variant="outline">+{day.logs.length - 5} more</Badge>
-                    )}
-                  </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <Card className="p-4">
+                <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
+                  <BarChart3 className="w-4 h-4" /> Most Repeated Habits
+                </h3>
+                <div className="h-[200px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={chartData.mostRepeatedHabits} layout="vertical">
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                      <XAxis type="number" hide />
+                      <YAxis 
+                        dataKey="name" 
+                        type="category" 
+                        width={100} 
+                        fontSize={10} 
+                        tick={{fill: 'currentColor'}}
+                      />
+                      <Tooltip />
+                      <Bar dataKey="count" radius={[0, 4, 4, 0]}>
+                        {chartData.mostRepeatedHabits.map((_, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+
+              <Card className="p-4">
+                <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
+                  <Tag className="w-4 h-4" /> Habits by Category
+                </h3>
+                <div className="h-[200px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={chartData.habitsByCategory}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis 
+                        dataKey="name" 
+                        fontSize={10} 
+                        tick={{fill: 'currentColor'}} 
+                      />
+                      <YAxis fontSize={10} />
+                      <Tooltip />
+                      <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+            </div>
+
+            <TabsContent value={timeRange} className="space-y-4 mt-0">
+              {filteredHistory.length === 0 ? (
+                <Card className="p-8 text-center">
+                  <p className="text-muted-foreground">
+                    No data found for this period.
+                  </p>
                 </Card>
-              ))
-            )}
-          </div>
+              ) : (
+                filteredHistory.map((day) => (
+                  <Card 
+                    key={day.date} 
+                    className="p-6 hover:shadow-md transition-all cursor-pointer group active:scale-[0.99]"
+                    onClick={() => setSelectedDay(day)}
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h3 className="font-semibold text-lg group-hover:text-primary transition-colors">
+                          {format(new Date(day.date), 'EEEE, MMMM d, yyyy')}
+                        </h3>
+                        <p className="text-sm text-muted-foreground flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3 text-success" />
+                          {day.logs.length} task{day.logs.length !== 1 ? 's' : ''} completed
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Badge className="text-lg px-4 py-2 bg-gradient-success">
+                          {day.totalPoints} pts
+                        </Badge>
+                        <ArrowRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {day.logs.slice(0, 5).map((log, index) => {
+                        const { taskName } = getTaskDisplay(log.taskId, log.subtaskId);
+                        return (
+                          <Badge key={index} variant="secondary" className="font-normal bg-secondary/50">
+                            {taskName}
+                          </Badge>
+                        );
+                      })}
+                      {day.logs.length > 5 && (
+                        <Badge variant="outline">+{day.logs.length - 5} more</Badge>
+                      )}
+                    </div>
+                  </Card>
+                ))
+              )}
+            </TabsContent>
+          </Tabs>
         </div>
 
-        {/* Detailed Breakdown Dialog */}
         <Dialog open={!!selectedDay} onOpenChange={() => setSelectedDay(null)}>
           <DialogContent className="sm:max-w-[450px] max-h-[85vh] flex flex-col">
             {selectedDay && (
