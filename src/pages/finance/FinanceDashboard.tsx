@@ -9,10 +9,26 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { getFinanceStats } from '../../lib/financeStorage';
 import { Link } from 'react-router-dom';
-import { Plus, Wallet, TrendingDown, PiggyBank, ArrowUpRight, ArrowDownRight, Loader2, X, Calendar as CalendarIcon, Tag, BarChart3, List, ChevronLeft } from 'lucide-react';
+import { 
+  Plus, 
+  Wallet, 
+  TrendingDown, 
+  PiggyBank, 
+  ArrowUpRight, 
+  ArrowDownRight, 
+  Loader2, 
+  X, 
+  Calendar as CalendarIcon, 
+  Tag, 
+  BarChart3, 
+  List, 
+  ChevronLeft,
+  Download 
+} from 'lucide-react';
 import { FinanceRecord } from '@/types/finance';
 import { format, startOfDay, endOfDay, isWithinInterval } from 'date-fns';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import * as XLSX from 'xlsx';
 
 export const FinanceDashboard: React.FC = () => {
   const { user } = useAuth();
@@ -54,6 +70,22 @@ export const FinanceDashboard: React.FC = () => {
     return new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(amount);
   };
 
+  const exportToExcel = () => {
+    const exportData = allPeriodRecords.map(record => ({
+      Date: format(new Date(record.date), 'yyyy-MM-dd HH:mm'),
+      Type: record.type.charAt(0).toUpperCase() + record.type.slice(1),
+      Category: record.category || 'Uncategorized',
+      Description: record.description || '-',
+      Amount: record.amount,
+      Currency: 'KES'
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Finance Records");
+    XLSX.writeFile(workbook, `Finance_Report_${period}_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+  };
+
   const netBalance = stats.income - stats.expense;
 
   const availableCategories = useMemo(() => {
@@ -83,21 +115,17 @@ export const FinanceDashboard: React.FC = () => {
     return records.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [allPeriodRecords, selectedCategory, categoryFilter, dateRange]);
 
-  // COMBINE LOGIC: Use a Map to aggregate amounts by trimmed label
   const graphData = useMemo(() => {
     const groupKey = categoryFilter === 'all' ? 'category' : 'description';
     const map = new Map<string, number>();
 
     filteredRecords.forEach(r => {
-      // 1. Get the raw value and trim whitespace to merge duplicates like "Chapati " and "Chapati"
       let label = (r[groupKey as keyof FinanceRecord] as string || '').trim();
       
-      // 2. Fallback: if description is empty, use the category name
       if (!label) {
         label = groupKey === 'category' ? 'Uncategorized' : (r.category || 'Unnamed Item');
       }
 
-      // 3. Aggregate
       map.set(label, (map.get(label) || 0) + r.amount);
     });
 
@@ -132,12 +160,22 @@ export const FinanceDashboard: React.FC = () => {
           <h2 className="text-3xl font-bold tracking-tight">Finance Overview</h2>
           <p className="text-muted-foreground">Track your wealth and spending habits</p>
         </div>
-        <Link to="/finance/log">
-          <Button size="lg" className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/20">
-            <Plus className="w-5 h-5" />
-            Log Transaction
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="outline" 
+            onClick={exportToExcel}
+            className="gap-2"
+          >
+            <Download className="w-4 h-4" />
+            Export Excel
           </Button>
-        </Link>
+          <Link to="/finance/log">
+            <Button size="lg" className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/20">
+              <Plus className="w-5 h-5" />
+              Log Transaction
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <div className="flex justify-center">
