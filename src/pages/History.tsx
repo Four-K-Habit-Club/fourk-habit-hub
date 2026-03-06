@@ -16,10 +16,11 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { TASKS, Task } from '@/types/tasks';
 
 export const History: React.FC = () => {
   const { user } = useAuth();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [history, setHistory] = useState<DailyProgress[]>([]);
   const [selectedDay, setSelectedDay] = useState<DailyProgress | null>(null);
 
@@ -33,15 +34,43 @@ export const History: React.FC = () => {
     fetchHistory();
   }, [user]);
 
+  const getTaskName = (nameEn: string, nameSw: string) => {
+    if (language === 'sw') return nameSw;
+    if (language === 'en-sw') return `${nameSw} (${nameEn})`;
+    return nameEn;
+  };
+
   /**
    * Helper to get translated names.
    * Logic: If subtaskId exists, translate that for the task name.
    * Translate taskId for the Category name.
    */
   const getTaskDisplay = (taskId: string, subtaskId?: string) => {
+    const task = TASKS.find(t => t.id === taskId);
+    if (!task) {
+      return {
+        category: t(taskId),
+        taskName: subtaskId ? t(subtaskId) : t(taskId),
+      };
+    }
+
+    const categoryEn = task.nameEn;
+    const categorySw = task.nameSw;
+
+    let taskNameEn = task.nameEn;
+    let taskNameSw = task.nameSw;
+
+    if (subtaskId) {
+      const subtask = task.subtasks.find(st => st.id === subtaskId);
+      if (subtask) {
+        taskNameEn = subtask.nameEn;
+        taskNameSw = subtask.nameSw;
+      }
+    }
+
     return {
-      category: t(taskId), // e.g., "Bathing"
-      taskName: subtaskId ? t(subtaskId) : t(taskId) // e.g., "Brushing teeth properly"
+      category: getTaskName(categoryEn, categorySw),
+      taskName: getTaskName(taskNameEn, taskNameSw),
     };
   };
 
