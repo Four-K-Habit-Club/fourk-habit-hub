@@ -311,7 +311,7 @@ export const History: React.FC = () => {
                       {day.logs.slice(0, 5).map((log, index) => {
                         const { taskName } = getTaskDisplay(log.taskId, log.subtaskId);
                         return (
-                          <Badge key={index} variant="secondary" className="font-normal bg-secondary/50">
+                          <Badge key={index} variant="secondary" className="font-normal bg-secondary">
                             {taskName}
                           </Badge>
                         );
