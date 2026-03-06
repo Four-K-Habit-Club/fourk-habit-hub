@@ -1,3 +1,4 @@
+// src/pages/History.tsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -5,9 +6,9 @@ import { Navigation } from '@/components/Navigation';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { getAllDailyProgress } from '@/lib/storage';
-import { DailyProgress, TASKS } from '@/types/tasks';
+import { DailyProgress } from '@/types/tasks';
 import { format } from 'date-fns';
-import { Award, TrendingUp, Calendar, CheckCircle2, ArrowRight } from 'lucide-react';
+import { Award, TrendingUp, Calendar, CheckCircle2, ArrowRight, Tag } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -32,17 +33,13 @@ export const History: React.FC = () => {
     fetchHistory();
   }, [user]);
 
-  
-  const getTaskName = (taskId: string, subtaskId?: string) => {
-  // If a subtask exists, translate the subtask ID (e.g., "teeth" becomes "Brushing teeth properly")
-  // This matches the text shown next to the checkboxes in your TaskCards.
-  if (subtaskId) {
-    return t(subtaskId);
-  }
-  
-  // If no subtask, translate the main task ID (e.g., "kuoga" becomes "Bathing")
-  return t(taskId);
-};
+  // Helper to get names similar to LogTasks logic
+  const getTaskDetails = (taskId: string, subtaskId?: string) => {
+    return {
+      category: t(taskId),
+      taskName: subtaskId ? t(subtaskId) : t(taskId)
+    };
+  };
 
   const totalAllTime = history.reduce((sum, day) => sum + day.totalPoints, 0);
   const averageDaily = history.length > 0 ? Math.round(totalAllTime / history.length) : 0;
@@ -62,6 +59,7 @@ export const History: React.FC = () => {
             </p>
           </div>
 
+          {/* Stats Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card className="p-6">
               <div className="flex items-center gap-3">
@@ -100,6 +98,7 @@ export const History: React.FC = () => {
             </Card>
           </div>
 
+          {/* History List */}
           <div className="space-y-4">
             {history.length === 0 ? (
               <Card className="p-8 text-center">
@@ -133,13 +132,16 @@ export const History: React.FC = () => {
                   </div>
 
                   <div className="flex flex-wrap gap-2">
-                    {day.logs.slice(0, 5).map((log, index) => (
-                      <Badge key={index} variant="secondary" className="font-normal">
-                        {getTaskName(log.taskId, log.subtaskId)}
-                      </Badge>
-                    ))}
-                    {day.logs.length > 5 && (
-                      <Badge variant="outline">+{day.logs.length - 5} more</Badge>
+                    {day.logs.slice(0, 6).map((log, index) => {
+                      const { taskName } = getTaskDetails(log.taskId, log.subtaskId);
+                      return (
+                        <Badge key={index} variant="secondary" className="font-normal bg-secondary/50">
+                          {taskName}
+                        </Badge>
+                      );
+                    })}
+                    {day.logs.length > 6 && (
+                      <Badge variant="outline">+{day.logs.length - 6} more</Badge>
                     )}
                   </div>
                 </Card>
@@ -150,7 +152,7 @@ export const History: React.FC = () => {
 
         {/* Detailed Breakdown Dialog */}
         <Dialog open={!!selectedDay} onOpenChange={() => setSelectedDay(null)}>
-          <DialogContent className="sm:max-w-[450px]">
+          <DialogContent className="sm:max-w-[450px] max-h-[90vh] flex flex-col">
             {selectedDay && (
               <>
                 <DialogHeader>
@@ -163,31 +165,41 @@ export const History: React.FC = () => {
                   </DialogDescription>
                 </DialogHeader>
 
-                <div className="py-4 space-y-4">
-                  <div className="bg-success/5 border border-success/20 rounded-xl p-4 text-center">
+                <div className="py-4 space-y-4 overflow-hidden flex flex-col">
+                  <div className="bg-success/5 border border-success/20 rounded-xl p-4 text-center shrink-0">
                     <p className="text-sm text-muted-foreground uppercase tracking-wider font-semibold">Total Points Earned</p>
                     <p className="text-4xl font-black text-success">{selectedDay.totalPoints}</p>
                   </div>
 
-                  <div className="space-y-2">
-                    <p className="text-sm font-bold text-muted-foreground px-1">Task Details</p>
-                    <div className="max-h-[40vh] overflow-y-auto space-y-2 pr-2 custom-scrollbar">
-                      {selectedDay.logs.map((log, index) => (
-                        <div key={index} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border border-border">
-                          <div className="flex items-center gap-3">
-                            <div className="w-2 h-2 rounded-full bg-success" />
-                            <span className="font-medium text-sm">
-                              {getTaskName(taskId, subtaskId)}
-                            </span>
+                  <div className="space-y-2 flex flex-col overflow-hidden">
+                    <p className="text-sm font-bold text-muted-foreground px-1 flex items-center gap-2">
+                      <Tag className="w-3 h-3" />
+                      Task Breakdown
+                    </p>
+                    <div className="overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                      {selectedDay.logs.map((log, index) => {
+                        const { category, taskName } = getTaskDetails(log.taskId, log.subtaskId);
+                        return (
+                          <div key={index} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border border-border">
+                            <div className="flex flex-col">
+                              <span className="text-[10px] uppercase tracking-wider text-primary font-bold">
+                                {category}
+                              </span>
+                              <span className="font-medium text-sm text-foreground">
+                                {taskName}
+                              </span>
+                            </div>
+                            <Badge variant="outline" className="font-mono font-bold text-success border-success/30">
+                              +{log.points}
+                            </Badge>
                           </div>
-                          <span className="font-mono font-bold text-primary">+{log.points}</span>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
                 
-                <div className="bg-primary/5 p-4 rounded-lg text-center">
+                <div className="bg-primary/5 p-4 rounded-lg text-center shrink-0 mt-2">
                   <p className="text-xs text-primary font-medium italic">
                     "Excellent work! Every task completed is a step toward a better home."
                   </p>
