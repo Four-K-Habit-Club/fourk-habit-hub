@@ -32,15 +32,17 @@ export const History: React.FC = () => {
     fetchHistory();
   }, [user]);
 
-  // Logic to resolve specific Task/Subtask name exactly like LogTasks
-  const getTaskName = (taskId: string, subtaskId?: string) => {
-  // If a subtask exists, translate the subtask ID (e.g., "teeth" becomes "Brushing teeth properly")
-  // This matches the text shown next to the checkboxes in your TaskCards.
-  if (subtaskId) {
-    return t(subtaskId);
-  }
   
-  // If no subtask, translate the main task ID (e.g., "kuoga" becomes "Bathing")
+  const getTaskName = (taskId: string, subtaskId?: string) => {
+  const task = TASKS.find((t) => t.id === taskId);
+  if (!task) return taskId;
+  
+  // If there is a subtask, get the specific name from translation keys
+  if (subtaskId) {
+    const subtask = task.subtasks.find(s => s.id === subtaskId);
+    // Try to find the localized subtask name, fallback to task category name
+    return subtask ? t(`${taskId}.${subtaskId}`) : t(taskId);
+  }
   return t(taskId);
 };
 
@@ -177,7 +179,7 @@ export const History: React.FC = () => {
                           <div className="flex items-center gap-3">
                             <div className="w-2 h-2 rounded-full bg-success" />
                             <span className="font-medium text-sm">
-                              {getTaskName(log.taskId, log.subtaskId)}
+                              {getTaskName(taskId, subtaskId)}
                             </span>
                           </div>
                           <span className="font-mono font-bold text-primary">+{log.points}</span>
