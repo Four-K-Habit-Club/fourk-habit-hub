@@ -6,9 +6,9 @@ import { Navigation } from '@/components/Navigation';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { getAllDailyProgress } from '@/lib/storage';
-import { DailyProgress, TASKS } from '@/types/tasks'; // Imported TASKS to ensure consistency
+import { DailyProgress } from '@/types/tasks';
 import { format } from 'date-fns';
-import { Award, TrendingUp, Calendar, CheckCircle2, ArrowRight, ClipboardCheck } from 'lucide-react';
+import { Award, TrendingUp, Calendar, CheckCircle2, ArrowRight, ListChecks } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -27,29 +27,14 @@ export const History: React.FC = () => {
     const fetchHistory = async () => {
       if (!user) return;
       const data = await getAllDailyProgress(user);
-      // Sort newest first
       setHistory(data.sort((a, b) => b.date.localeCompare(a.date)));
     };
     fetchHistory();
   }, [user]);
 
-  /**
-   * getTaskDisplay logic
-   * This matches the logic in LogTasks.tsx
-   */
-  const getTaskDisplay = (taskId: string, subtaskId?: string) => {
-    // Translate the Category (e.g., "kuoga" -> "Bathing")
-    const categoryName = t(taskId);
-    
-    // Translate the Task (e.g., "teeth" -> "Brushing teeth properly")
-    // If no subtask exists, we use the category name
-    const taskName = subtaskId ? t(subtaskId) : categoryName;
-
-    return {
-      category: categoryName,
-      task: taskName
-    };
-  };
+  // Matches the exact naming logic in LogTasks.tsx
+  const getTaskSentence = (subtaskId: string) => t(subtaskId);
+  const getCategoryName = (taskId: string) => t(taskId);
 
   const totalAllTime = history.reduce((sum, day) => sum + day.totalPoints, 0);
   const averageDaily = history.length > 0 ? Math.round(totalAllTime / history.length) : 0;
@@ -60,49 +45,43 @@ export const History: React.FC = () => {
       
       <main className="container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto space-y-6">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground mb-2">
+          <div className="flex flex-col gap-1">
+            <h1 className="text-3xl font-bold text-foreground">
               {t('nav.history')}
             </h1>
-            <p className="text-muted-foreground">
-              View your household task completion history and statistics
+            <p className="text-muted-foreground italic">
+              Record of your completed household tasks
             </p>
           </div>
 
-          {/* Statistics Section */}
+          {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card className="p-6">
+            <Card className="p-6 border-l-4 border-l-primary">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-primary/10">
-                  <Award className="w-5 h-5 text-primary" />
-                </div>
+                <Award className="w-5 h-5 text-primary" />
                 <div>
-                  <p className="text-sm text-muted-foreground">Total Points</p>
-                  <p className="text-2xl font-bold text-foreground">{totalAllTime}</p>
+                  <p className="text-xs font-bold uppercase text-muted-foreground">Total Points</p>
+                  <p className="text-2xl font-bold">{totalAllTime}</p>
                 </div>
               </div>
             </Card>
 
-            <Card className="p-6">
+            <Card className="p-6 border-l-4 border-l-success">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-success/10">
-                  <TrendingUp className="w-5 h-5 text-success" />
-                </div>
+                <TrendingUp className="w-5 h-5 text-success" />
                 <div>
-                  <p className="text-sm text-muted-foreground">Average Daily</p>
-                  <p className="text-2xl font-bold text-foreground">{averageDaily}</p>
+                  <p className="text-xs font-bold uppercase text-muted-foreground">Daily Average</p>
+                  <p className="text-2xl font-bold">{averageDaily}</p>
                 </div>
               </div>
             </Card>
 
-            <Card className="p-6">
+            <Card className="p-6 border-l-4 border-l-secondary">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-secondary/10">
-                  <Calendar className="w-5 h-5 text-secondary" />
-                </div>
+                <Calendar className="w-5 h-5 text-secondary" />
                 <div>
-                  <p className="text-sm text-muted-foreground">Days Tracked</p>
-                  <p className="text-2xl font-bold text-foreground">{history.length}</p>
+                  <p className="text-xs font-bold uppercase text-muted-foreground">Days Logged</p>
+                  <p className="text-2xl font-bold">{history.length}</p>
                 </div>
               </div>
             </Card>
@@ -111,45 +90,47 @@ export const History: React.FC = () => {
           {/* History List */}
           <div className="space-y-4">
             {history.length === 0 ? (
-              <Card className="p-8 text-center">
-                <p className="text-muted-foreground">
-                  No history yet. Start logging your tasks to see your progress here!
-                </p>
+              <Card className="p-12 text-center border-dashed">
+                <p className="text-muted-foreground">No tasks logged yet.</p>
               </Card>
             ) : (
               history.map((day) => (
                 <Card 
                   key={day.date} 
-                  className="p-6 hover:shadow-md transition-all cursor-pointer group active:scale-[0.99]"
+                  className="p-5 hover:border-primary/50 transition-colors cursor-pointer group"
                   onClick={() => setSelectedDay(day)}
                 >
                   <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h3 className="font-semibold text-lg group-hover:text-primary transition-colors">
+                    <div className="space-y-1">
+                      <h3 className="font-bold text-lg">
                         {format(new Date(day.date), 'EEEE, MMMM d, yyyy')}
                       </h3>
-                      <p className="text-sm text-muted-foreground flex items-center gap-1">
-                        <CheckCircle2 className="w-4 h-3 text-success" />
-                        {day.logs.length} task{day.logs.length !== 1 ? 's' : ''} completed
-                      </p>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Badge variant="secondary" className="bg-success/10 text-success hover:bg-success/10 border-none">
+                          <CheckCircle2 className="w-3 h-3 mr-1" />
+                          {day.logs.length} Completed
+                        </Badge>
+                        <span className="text-xs">• Click to view details</span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <Badge className="text-lg px-4 py-2 bg-gradient-success">
-                        {day.totalPoints} pts
-                      </Badge>
-                      <ArrowRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <p className="text-2xl font-black text-primary">{day.totalPoints}</p>
+                        <p className="text-[10px] font-bold uppercase text-muted-foreground">Points</p>
+                      </div>
+                      <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:translate-x-1 transition-transform" />
                     </div>
                   </div>
 
-                  {/* Summary Preview: Displays sentences, not IDs */}
+                  {/* Quick Task Sentence Preview */}
                   <div className="flex flex-wrap gap-2">
-                    {day.logs.slice(0, 4).map((log, index) => (
-                      <Badge key={index} variant="secondary" className="font-normal">
-                        {getTaskDisplay(log.taskId, log.subtaskId).task}
-                      </Badge>
+                    {day.logs.slice(0, 3).map((log, idx) => (
+                      <span key={idx} className="text-xs bg-muted px-2 py-1 rounded-md text-muted-foreground">
+                        {log.subtaskId ? getTaskSentence(log.subtaskId) : getCategoryName(log.taskId)}
+                      </span>
                     ))}
-                    {day.logs.length > 4 && (
-                      <Badge variant="outline">+{day.logs.length - 4} more</Badge>
+                    {day.logs.length > 3 && (
+                      <span className="text-xs text-primary font-bold">+{day.logs.length - 3} more</span>
                     )}
                   </div>
                 </Card>
@@ -160,54 +141,57 @@ export const History: React.FC = () => {
 
         {/* Detailed Breakdown Dialog */}
         <Dialog open={!!selectedDay} onOpenChange={() => setSelectedDay(null)}>
-          <DialogContent className="sm:max-w-[450px] max-h-[80vh] overflow-y-auto">
+          <DialogContent className="sm:max-w-[450px] max-h-[85vh] flex flex-col p-0 overflow-hidden">
             {selectedDay && (
               <>
-                <DialogHeader>
-                  <DialogTitle className="text-2xl font-bold flex items-center gap-2">
-                    <ClipboardCheck className="w-6 h-6 text-primary" />
-                    Day Summary
-                  </DialogTitle>
-                  <DialogDescription className="text-lg font-medium">
-                    {format(new Date(selectedDay.date), 'EEEE, MMMM d')}
-                  </DialogDescription>
-                </DialogHeader>
+                <div className="p-6 pb-0">
+                  <DialogHeader>
+                    <div className="flex items-center gap-2 text-primary mb-1">
+                      <ListChecks className="w-5 h-5" />
+                      <span className="text-xs font-bold uppercase tracking-widest">Daily Summary</span>
+                    </div>
+                    <DialogTitle className="text-2xl font-black">
+                      {format(new Date(selectedDay.date), 'MMMM d, yyyy')}
+                    </DialogTitle>
+                    <DialogDescription className="text-base">
+                      You earned <span className="text-success font-bold">{selectedDay.totalPoints} points</span> today.
+                    </DialogDescription>
+                  </DialogHeader>
+                </div>
 
-                <div className="py-4 space-y-6">
-                  <div className="bg-success/5 border border-success/20 rounded-xl p-4 text-center">
-                    <p className="text-xs text-muted-foreground uppercase tracking-widest font-bold mb-1">Total Points</p>
-                    <p className="text-4xl font-black text-success">{selectedDay.totalPoints}</p>
-                  </div>
-
-                  <div className="space-y-3">
-                    <p className="text-sm font-bold text-muted-foreground px-1">Task Details</p>
+                <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                   <div className="space-y-3">
+                    <p className="text-[10px] font-black uppercase text-muted-foreground tracking-tighter">Detailed tasks</p>
+                    
                     <div className="space-y-2">
-                      {selectedDay.logs.map((log, index) => {
-                        const details = getTaskDisplay(log.taskId, log.subtaskId);
-                        return (
-                          <div key={index} className="flex items-center justify-between p-3 bg-muted/40 rounded-lg border border-border/50">
-                            <div className="flex flex-col">
-                              <span className="text-[10px] uppercase font-bold text-primary/70">
-                                {details.category}
-                              </span>
-                              <span className="font-semibold text-sm leading-tight">
-                                {details.task}
-                              </span>
-                            </div>
-                            <span className="font-mono font-bold text-success text-sm">
-                              +{log.points}
+                      {selectedDay.logs.map((log, index) => (
+                        <div key={index} className="flex flex-col p-3 rounded-xl bg-muted/30 border border-border/50">
+                          <div className="flex items-center justify-between mb-1">
+                            {/* Category - e.g., BATHING */}
+                            <span className="text-[10px] font-bold text-primary uppercase tracking-wide">
+                              {getCategoryName(log.taskId)}
+                            </span>
+                            {/* Points - e.g., 5 pts */}
+                            <span className="text-xs font-bold text-success bg-success/10 px-2 py-0.5 rounded-full">
+                              {log.points} pts
                             </span>
                           </div>
-                        );
-                      })}
+                          {/* Task Sentence - e.g., Brushing teeth properly */}
+                          <p className="text-sm font-semibold text-foreground leading-tight">
+                            {log.subtaskId ? getTaskSentence(log.subtaskId) : getCategoryName(log.taskId)}
+                          </p>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
                 
-                <div className="bg-primary/5 p-4 rounded-lg text-center border border-primary/10">
-                  <p className="text-xs text-primary font-medium italic">
-                    "Excellent work! Every task completed is a step toward a better home."
-                  </p>
+                <div className="p-6 pt-2">
+                  <div className="bg-primary/5 border border-primary/10 p-4 rounded-xl text-center">
+                    <p className="text-xs text-primary font-medium">
+                      "Excellent work! Every task completed is a step toward a better home."
+                    </p>
+                  </div>
                 </div>
               </>
             )}
