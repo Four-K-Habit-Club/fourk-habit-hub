@@ -34,15 +34,13 @@ export const History: React.FC = () => {
 
   
   const getTaskName = (taskId: string, subtaskId?: string) => {
-  const task = TASKS.find((t) => t.id === taskId);
-  if (!task) return taskId;
-  
-  // If there is a subtask, get the specific name from translation keys
+  // If a subtask exists, translate the subtask ID (e.g., "teeth" becomes "Brushing teeth properly")
+  // This matches the text shown next to the checkboxes in your TaskCards.
   if (subtaskId) {
-    const subtask = task.subtasks.find(s => s.id === subtaskId);
-    // Try to find the localized subtask name, fallback to task category name
-    return subtask ? t(`${taskId}.${subtaskId}`) : t(taskId);
+    return t(subtaskId);
   }
+  
+  // If no subtask, translate the main task ID (e.g., "kuoga" becomes "Bathing")
   return t(taskId);
 };
 
