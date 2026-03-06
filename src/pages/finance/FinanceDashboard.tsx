@@ -32,7 +32,8 @@ import * as XLSX from 'xlsx';
 
 export const FinanceDashboard: React.FC = () => {
   const { user } = useAuth();
-  const [period, setPeriod] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('monthly');
+  // Added 'all' to the period type
+  const [period, setPeriod] = useState<'daily' | 'weekly' | 'monthly' | 'yearly' | 'all'>('monthly');
   
   const [stats, setStats] = useState({ income: 0, expense: 0, savings: 0 });
   const [allPeriodRecords, setAllPeriodRecords] = useState<FinanceRecord[]>([]);
@@ -153,6 +154,9 @@ export const FinanceDashboard: React.FC = () => {
     );
   }
 
+  // Helper for display labels
+  const getPeriodLabel = (p: string) => p === 'all' ? 'Till Date' : p;
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10 px-4 max-w-7xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -179,12 +183,13 @@ export const FinanceDashboard: React.FC = () => {
       </div>
 
       <div className="flex justify-center">
-        <Tabs value={period} onValueChange={(v) => setPeriod(v as any)} className="w-full max-w-md">
-          <TabsList className="grid w-full grid-cols-4 bg-muted/50 p-1">
+        <Tabs value={period} onValueChange={(v) => setPeriod(v as any)} className="w-full max-w-lg">
+          <TabsList className="grid w-full grid-cols-5 bg-muted/50 p-1">
             <TabsTrigger value="daily">Daily</TabsTrigger>
             <TabsTrigger value="weekly">Weekly</TabsTrigger>
             <TabsTrigger value="monthly">Monthly</TabsTrigger>
             <TabsTrigger value="yearly">Yearly</TabsTrigger>
+            <TabsTrigger value="all">Till Date</TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
@@ -195,7 +200,7 @@ export const FinanceDashboard: React.FC = () => {
             <div className="p-3 rounded-full bg-emerald-100 text-emerald-600"><Wallet className="w-6 h-6" /></div>
             <div className="px-2 py-1 rounded-full bg-emerald-100/50 text-emerald-700 text-xs font-medium flex items-center gap-1"><ArrowUpRight className="w-3 h-3" /> Income</div>
           </div>
-          <p className="text-sm font-medium text-muted-foreground capitalize">{period} Income</p>
+          <p className="text-sm font-medium text-muted-foreground capitalize">{getPeriodLabel(period)} Income</p>
           <h3 className="text-3xl font-bold text-emerald-700 mt-1">{formatCurrency(stats.income)}</h3>
         </Card>
 
@@ -204,7 +209,7 @@ export const FinanceDashboard: React.FC = () => {
             <div className="p-3 rounded-full bg-red-100 text-red-600"><TrendingDown className="w-6 h-6" /></div>
             <div className="px-2 py-1 rounded-full bg-red-100/50 text-red-700 text-xs font-medium flex items-center gap-1"><ArrowDownRight className="w-3 h-3" /> Expenses</div>
           </div>
-          <p className="text-sm font-medium text-muted-foreground capitalize">{period} Expenses</p>
+          <p className="text-sm font-medium text-muted-foreground capitalize">{getPeriodLabel(period)} Expenses</p>
           <h3 className="text-3xl font-bold text-red-700 mt-1">{formatCurrency(stats.expense)}</h3>
         </Card>
 
@@ -213,7 +218,7 @@ export const FinanceDashboard: React.FC = () => {
             <div className="p-3 rounded-full bg-blue-100 text-blue-600"><PiggyBank className="w-6 h-6" /></div>
             <div className="px-2 py-1 rounded-full bg-blue-100/50 text-blue-700 text-xs font-medium">Savings</div>
           </div>
-          <p className="text-sm font-medium text-muted-foreground capitalize">{period} Savings</p>
+          <p className="text-sm font-medium text-muted-foreground capitalize">{getPeriodLabel(period)} Savings</p>
           <h3 className="text-3xl font-bold text-blue-700 mt-1">{formatCurrency(stats.savings)}</h3>
         </Card>
       </div>
@@ -230,7 +235,7 @@ export const FinanceDashboard: React.FC = () => {
                 )}
                 <h3 className="font-semibold capitalize flex items-center gap-2 text-lg">
                   <span className={`w-2.5 h-2.5 rounded-full ${selectedCategory === 'income' ? 'bg-emerald-500' : selectedCategory === 'expense' ? 'bg-red-500' : 'bg-blue-500'}`} />
-                  {categoryFilter === 'all' ? `${period} ${selectedCategory} Breakdown` : `Items in ${categoryFilter}`}
+                  {categoryFilter === 'all' ? `${getPeriodLabel(period)} ${selectedCategory} Breakdown` : `Items in ${categoryFilter}`}
                 </h3>
               </div>
               <div className="flex items-center gap-3">
@@ -371,3 +376,4 @@ export const FinanceDashboard: React.FC = () => {
     </div>
   );
 };
+
