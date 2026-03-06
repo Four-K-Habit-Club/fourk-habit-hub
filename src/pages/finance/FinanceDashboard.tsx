@@ -1,4 +1,4 @@
-//pages/finance/FinanceDashboard.tsx
+// pages/finance/FinanceDashboard.tsx
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card } from '@/components/ui/card';
@@ -23,18 +23,25 @@ import {
   BarChart3, 
   List, 
   ChevronLeft,
-  Download 
+  Download,
+  AlertCircle,
+  CheckCircle2
 } from 'lucide-react';
-import { FinanceRecord } from '@/types/finance';
+import { FinanceRecord, FINANCE_CATEGORIES } from '@/types/finance';
 import { format, startOfDay, endOfDay, isWithinInterval } from 'date-fns';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
 import * as XLSX from 'xlsx';
+
+// Define the 50-30-20 mapping based on FINANCE_CATEGORIES
+const BUDGET_MAPPING = {
+  Needs: ['Rent', 'Utilities', 'Food', 'Transport', 'Health', 'Education'],
+  Wants: ['Shopping', 'Entertainment', 'Other'],
+  Dreams: FINANCE_CATEGORIES.savings // All savings categories map to Dreams/Goals
+};
 
 export const FinanceDashboard: React.FC = () => {
   const { user } = useAuth();
-  // Added 'all' to the period type
   const [period, setPeriod] = useState<'daily' | 'weekly' | 'monthly' | 'yearly' | 'all'>('monthly');
-  
   const [stats, setStats] = useState({ income: 0, expense: 0, savings: 0 });
   const [allPeriodRecords, setAllPeriodRecords] = useState<FinanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,6 +50,9 @@ export const FinanceDashboard: React.FC = () => {
   const [viewMode, setViewMode] = useState<'graph' | 'detail'>('detail');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined });
+  
+  // State for Budget Assessment Interaction
+  const [activeBudgetGroup, setActiveBudgetGroup] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -52,7 +62,7 @@ export const FinanceDashboard: React.FC = () => {
         setSelectedCategory(null);
         setCategoryFilter('all');
         setDateRange({ from: undefined, to: undefined });
-        setViewMode('detail');
+        setActiveBudgetGroup(null);
         
         const { stats: newStats, records } = await getFinanceStats(user.id, period, new Date());
         setStats(newStats);
@@ -70,6 +80,51 @@ export const FinanceDashboard: React.FC = () => {
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(amount);
   };
+
+  // Logic for 50-30-20 Rule Assessment
+  const budgetAssessment = useMemo(() => {
+    const needsAmount = allPeriodRecords
+      .filter(r => r.type === 'expense' && BUDGET_MAPPING.Needs.includes(r.category))
+      .reduce((sum, r) => sum + r.amount, 0);
+    
+    const wantsAmount = allPeriodRecords
+      .filter(r => r.type === 'expense' && BUDGET_MAPPING.Wants.includes(r.category))
+      .reduce((sum, r) => sum + r.amount, 0);
+    
+    const dreamsAmount = allPeriodRecords
+      .filter(r => r.type === 'savings')
+      .reduce((sum, r) => sum + r.amount, 0);
+
+    const totalBudget = stats.income || (needsAmount + wantsAmount + dreamsAmount);
+    
+    const data = [
+      { name: 'Needs', value: needsAmount, target: 0.50, color: '#0ea5e9' }, // Blue
+      { name: 'Wants', value: wantsAmount, target: 0.30, color: '#f43f5e' }, // Rose
+      { name: 'Dreams', value: dreamsAmount, target: 0.20, color: '#10b981' }, // Emerald
+    ];
+
+    const analysis = data.map(item => {
+      const currentPct = totalBudget > 0 ? item.value / totalBudget : 0;
+      const isOver = currentPct > item.target;
+      const diffPct = Math.max(0, currentPct - item.target);
+      const diffAmount = Math.max(0, item.value - (totalBudget * item.target));
+      
+      return { ...item, currentPct, isOver, diffPct, diffAmount };
+    });
+
+    return { data, analysis, totalBudget };
+  }, [allPeriodRecords, stats.income]);
+
+  // Records for the clicked pie slice
+  const budgetGroupRecords = useMemo(() => {
+    if (!activeBudgetGroup) return [];
+    return allPeriodRecords.filter(r => {
+      if (activeBudgetGroup === 'Dreams') return r.type === 'savings';
+      if (activeBudgetGroup === 'Needs') return r.type === 'expense' && BUDGET_MAPPING.Needs.includes(r.category);
+      if (activeBudgetGroup === 'Wants') return r.type === 'expense' && BUDGET_MAPPING.Wants.includes(r.category);
+      return false;
+    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [activeBudgetGroup, allPeriodRecords]);
 
   const exportToExcel = () => {
     const exportData = allPeriodRecords.map(record => ({
@@ -154,29 +209,23 @@ export const FinanceDashboard: React.FC = () => {
     );
   }
 
-  // Helper for display labels
   const getPeriodLabel = (p: string) => p === 'all' ? 'Till Date' : p;
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10 px-4 max-w-7xl mx-auto">
+      {/* Header Section */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Finance Overview</h2>
           <p className="text-muted-foreground">Track your wealth and spending habits</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button 
-            variant="outline" 
-            onClick={exportToExcel}
-            className="gap-2"
-          >
-            <Download className="w-4 h-4" />
-            Export Excel
+          <Button variant="outline" onClick={exportToExcel} className="gap-2">
+            <Download className="w-4 h-4" /> Export Excel
           </Button>
           <Link to="/finance/log">
             <Button size="lg" className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/20">
-              <Plus className="w-5 h-5" />
-              Log Transaction
+              <Plus className="w-5 h-5" /> Log Transaction
             </Button>
           </Link>
         </div>
@@ -194,6 +243,7 @@ export const FinanceDashboard: React.FC = () => {
         </Tabs>
       </div>
 
+      {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card onClick={() => setSelectedCategory(selectedCategory === 'income' ? null : 'income')} className={`p-6 cursor-pointer transition-all duration-200 ${selectedCategory === 'income' ? 'ring-2 ring-emerald-500 scale-[1.02]' : 'hover:shadow-md hover:-translate-y-1'} bg-gradient-to-br from-emerald-50 to-emerald-100/30 border-emerald-100`}>
           <div className="flex items-center justify-between mb-4">
@@ -223,6 +273,7 @@ export const FinanceDashboard: React.FC = () => {
         </Card>
       </div>
 
+      {/* Drill-down Section (Existing) */}
       {selectedCategory && (
         <Card className="p-0 overflow-hidden border animate-in slide-in-from-top-4 duration-300">
           <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'graph' | 'detail')} className="w-full">
@@ -281,75 +332,44 @@ export const FinanceDashboard: React.FC = () => {
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={graphData} margin={{ top: 20, right: 30, left: 40, bottom: 100 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.5} />
-                      <XAxis 
-                        dataKey="label" 
-                        angle={-45} 
-                        textAnchor="end" 
-                        height={100} 
-                        interval={0}
-                        tick={{ fontSize: 11, fill: 'currentColor' }}
-                      />
-                      <YAxis 
-                        tickFormatter={(value) => `KSh ${value > 999 ? (value/1000).toFixed(0) + 'k' : value}`} 
-                        tick={{ fontSize: 11 }}
-                        width={60}
-                      />
+                      <XAxis dataKey="label" angle={-45} textAnchor="end" height={100} interval={0} tick={{ fontSize: 11, fill: 'currentColor' }} />
+                      <YAxis tickFormatter={(value) => `KSh ${value > 999 ? (value/1000).toFixed(0) + 'k' : value}`} tick={{ fontSize: 11 }} width={60} />
                       <Tooltip 
                         cursor={{fill: 'rgba(0,0,0,0.05)'}}
                         formatter={(value: number) => [formatCurrency(value), categoryFilter === 'all' ? "Category Total" : "Item Total"]}
-                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                       />
-                      <Bar 
-                        dataKey="amount" 
-                        radius={[4, 4, 0, 0]} 
-                        barSize={40}
-                        onClick={(data) => {
-                          if (categoryFilter === 'all') {
-                            setCategoryFilter(data.label);
-                          }
-                        }}
-                        style={{ cursor: categoryFilter === 'all' ? 'pointer' : 'default' }}
-                      >
-                        {graphData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={getColor(index, selectedCategory)} />
-                        ))}
+                      <Bar dataKey="amount" radius={[4, 4, 0, 0]} barSize={40} onClick={(data) => categoryFilter === 'all' && setCategoryFilter(data.label)}>
+                        {graphData.map((entry, index) => <Cell key={`cell-${index}`} fill={getColor(index, selectedCategory!)} />)}
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
-                  {categoryFilter === 'all' && (
-                    <p className="text-center text-xs text-muted-foreground mt-2 italic">Tip: Click a bar to see individual items</p>
-                  )}
                 </div>
-              ) : (
-                <div className="h-[300px] flex flex-col items-center justify-center text-muted-foreground">
-                  <BarChart3 className="w-12 h-12 mb-2 opacity-10" />
-                  <p>No data matches the selected filters.</p>
-                </div>
-              )}
+              ) : <div className="h-[300px] flex items-center justify-center text-muted-foreground">No data matches filters.</div>}
             </TabsContent>
             
             <TabsContent value="detail" className="m-0">
               <div className="max-h-[500px] overflow-y-auto divide-y">
-                {filteredRecords.length > 0 ? filteredRecords.map((record) => (
-                  <div key={record.id} className="p-4 hover:bg-muted/50 transition-colors flex items-center justify-between">
+                {filteredRecords.map((record) => (
+                  <div key={record.id} className="p-4 hover:bg-muted/50 flex items-center justify-between">
                     <div className="space-y-1">
                       <div className="font-medium">{record.description || record.category}</div>
                       <div className="text-xs text-muted-foreground flex items-center gap-3">
-                        <span className="flex items-center gap-1"><CalendarIcon className="w-3 h-3" />{format(new Date(record.date), 'MMM dd, yyyy')}</span>
-                        <span className="bg-muted px-1.5 py-0.5 rounded-full"><Tag className="w-3 h-3" />{record.category || 'Uncategorized'}</span>
+                        <span>{format(new Date(record.date), 'MMM dd, yyyy')}</span>
+                        <span className="bg-muted px-1.5 py-0.5 rounded-full">{record.category}</span>
                       </div>
                     </div>
                     <div className={`font-bold ${record.type === 'expense' ? 'text-red-600' : 'text-emerald-600'}`}>
                       {record.type === 'expense' ? '-' : '+'}{formatCurrency(record.amount)}
                     </div>
                   </div>
-                )) : <div className="p-12 text-center text-muted-foreground">No transactions match filters.</div>}
+                ))}
               </div>
             </TabsContent>
           </Tabs>
         </Card>
       )}
 
+      {/* Financial Health Summary */}
       <Card className="p-6 bg-card border shadow-sm">
         <h3 className="font-semibold mb-6 flex items-center gap-2"><span className="w-1 h-6 bg-primary rounded-full"></span>Financial Health Summary</h3>
         <div className="space-y-6">
@@ -372,6 +392,115 @@ export const FinanceDashboard: React.FC = () => {
             </div>
           </div>
         </div>
+      </Card>
+
+      {/* NEW: Budget Assessment Section */}
+      <Card className="p-6 bg-card border shadow-sm overflow-hidden">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+          <h3 className="font-semibold flex items-center gap-2">
+            <span className="w-1 h-6 bg-orange-500 rounded-full"></span>
+            Budget Assessment (50-30-20 Rule)
+          </h3>
+          <div className="flex gap-4 text-xs">
+            <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-sky-500" /> Needs (50%)</div>
+            <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-rose-500" /> Wants (30%)</div>
+            <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-emerald-500" /> Dreams (20%)</div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+          {/* Pie Chart */}
+          <div className="h-[300px] w-full relative">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={budgetAssessment.data}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={70}
+                  outerRadius={100}
+                  paddingAngle={5}
+                  dataKey="value"
+                  stroke="none"
+                  onClick={(data) => setActiveBudgetGroup(activeBudgetGroup === data.name ? null : data.name)}
+                  style={{ cursor: 'pointer', outline: 'none' }}
+                >
+                  {budgetAssessment.data.map((entry, index) => (
+                    <Cell 
+                      key={`cell-${index}`} 
+                      fill={entry.color} 
+                      opacity={activeBudgetGroup && activeBudgetGroup !== entry.name ? 0.4 : 1}
+                      stroke={activeBudgetGroup === entry.name ? '#000' : 'none'}
+                      strokeWidth={2}
+                    />
+                  ))}
+                </Pie>
+                <Tooltip 
+                  formatter={(value: number) => formatCurrency(value)}
+                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              <span className="text-2xl font-bold">{Math.round(((stats.expense + stats.savings) / (stats.income || 1)) * 100)}%</span>
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wider">of Income</span>
+            </div>
+          </div>
+
+          {/* Analysis Info */}
+          <div className="space-y-4">
+            {budgetAssessment.analysis.map((item) => (
+              <div key={item.name} className={`p-4 rounded-xl border transition-colors ${activeBudgetGroup === item.name ? 'bg-muted ring-1 ring-primary' : 'bg-muted/30'}`}>
+                <div className="flex justify-between items-center mb-1">
+                  <span className="font-bold flex items-center gap-2">
+                    {item.name} 
+                    <span className="text-xs font-normal text-muted-foreground">({Math.round(item.currentPct * 100)}% vs {item.target * 100}%)</span>
+                  </span>
+                  <span className="font-semibold">{formatCurrency(item.value)}</span>
+                </div>
+                
+                {item.isOver ? (
+                  <div className="flex items-center gap-2 text-xs text-red-600 bg-red-50 p-2 rounded mt-2">
+                    <AlertCircle className="w-3.5 h-3.5" />
+                    <span>Over budget by <b>{Math.round(item.diffPct * 100)}%</b> ({formatCurrency(item.diffAmount)})</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-xs text-emerald-600 bg-emerald-50 p-2 rounded mt-2">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Within the recommended {item.target * 100}% limit.</span>
+                  </div>
+                )}
+              </div>
+            ))}
+            <p className="text-[11px] text-muted-foreground italic text-center">Tip: Click a section of the pie chart to view transactions.</p>
+          </div>
+        </div>
+
+        {/* Click-to-reveal Details */}
+        {activeBudgetGroup && (
+          <div className="mt-8 border-t pt-6 animate-in slide-in-from-bottom-2">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="font-medium flex items-center gap-2 text-lg">
+                Recent <span className="font-bold">{activeBudgetGroup}</span> Transactions
+              </h4>
+              <Button variant="ghost" size="sm" onClick={() => setActiveBudgetGroup(null)}><X className="w-4 h-4" /></Button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {budgetGroupRecords.slice(0, 10).map((record) => (
+                <div key={record.id} className="flex justify-between items-center p-3 rounded-lg bg-muted/20 border border-transparent hover:border-muted-foreground/20 transition-all">
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium">{record.description || record.category}</span>
+                    <span className="text-[10px] text-muted-foreground">{format(new Date(record.date), 'PPP')}</span>
+                  </div>
+                  <span className="font-mono font-bold text-sm">{formatCurrency(record.amount)}</span>
+                </div>
+              ))}
+              {budgetGroupRecords.length === 0 && (
+                <p className="col-span-2 text-center py-8 text-muted-foreground">No records found for this category.</p>
+              )}
+            </div>
+          </div>
+        )}
       </Card>
     </div>
   );
